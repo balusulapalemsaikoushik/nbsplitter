@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nbsplitter"
+version = "0.0.1"
+authors = [
+    { "name"="Sai Koushik Balusulapalem" },
+]
+requires-python = ">=3.9"
+license = "Apache-2.0"
+
+dynamic = ["dependencies"]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.metadata.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build]
+ignore-vcs = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nbsplitter"]
