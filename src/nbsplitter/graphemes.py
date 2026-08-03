@@ -39,12 +39,21 @@ TOKENIZER_C = Dictionary(dict="full").create(mode="C")
 
 
 class Grapheme(ABC):
+    """A single grapheme.
+
+    Represents the smallest unit of written text that maintains its intended
+    pronunciation. Can either be a single character or a multi-character
+    compound with a distinct pronunciation.
+    """
+
     @abstractmethod
     def surface(self) -> str:
+        """The original Japanese form of this grapheme."""
         pass
 
     @abstractmethod
     def reading_form(self) -> str:
+        """The reading form of this grapheme (in katakana)."""
         pass
 
 
@@ -61,12 +70,16 @@ class _Grapheme(Grapheme):
 
 
 class GraphemeList(ABC):
+    """A list of graphemes."""
+
     @abstractmethod
     def surface(self) -> list[str]:
+        """A list containing every grapheme's original Japanese form."""
         pass
 
     @abstractmethod
     def reading_form(self) -> list[str]:
+        """A list containing every grapheme's reading form (in katakana)."""
         pass
 
 
@@ -160,6 +173,21 @@ def _split_token_graphemes(
 
 
 def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
+    """Splits Japanese text into graphemes.
+
+    Args:
+        japanese: The text to be split.
+        split_rendaku: NOT RECOMMENDED: Use only if intending on verifying
+            graphemes later on. This option may interpret compounds whose
+            latter parts happen to be the voiced equivalents of unvoiced
+            counterparts as examples of rendaku when they should not be
+            considered as such. If True latter parts of a compound affected by
+            rendaku are treated as separate graphemes.
+
+    Returns:
+        A GraphemeList representing the split text.
+    """
+
     graphemes = []
     for token in TOKENIZER_A.tokenize(japanese):
         graphemes += _split_token_graphemes(
