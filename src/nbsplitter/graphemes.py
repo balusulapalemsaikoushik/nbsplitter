@@ -10,6 +10,10 @@ from sudachipy import Dictionary
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
 
+MISC_READINGS = {
+    "ヶ": ["カ", "ガ", "コ"],
+}
+
 RENDAKU_TABLE = {
     "カ": "ガ",
     "キ": "ギ",
@@ -120,6 +124,8 @@ def _normalize_kun(kun: str):
 
 def _get_readings(japanese: str, include_voiced: bool = False):
     if len(japanese) == 1:
+        if japanese in MISC_READINGS:
+            return MISC_READINGS[japanese]
         kanjidic2 = _get_kanjidic2()
         kanji = kanjidic2.find(f".//character[literal='{japanese}']")
         if kanji is not None:
@@ -130,10 +136,18 @@ def _get_readings(japanese: str, include_voiced: bool = False):
                 + [_normalize_kun(kun_reading.text) for kun_reading in kun_readings]
             )
         else:
-            readings = [hira2kata(japanese)]
+            return [hira2kata(japanese)]
     else:
         readings = [TOKENIZER_C.tokenize(japanese)[0].reading_form()]
-    return readings + _get_voiced_readings(readings) if include_voiced else readings
+    starts_with_kana = (
+        ("\u3040" <= japanese[0] <= "\u309f")  # Hiragana
+        or ("\u30a0" <= japanese[0] <= "\u30ff")  # Katakana
+    )
+    return (
+        readings + _get_voiced_readings(readings)
+        if (not starts_with_kana) and include_voiced
+        else readings
+    )
 
 
 def _split_token_graphemes(
@@ -169,7 +183,7 @@ def _split_token_graphemes(
                         reading_split = reading_right
                         break
         surface_right += 1
-    return graphemes
+    return graphemes if graphemes else [_Grapheme(surface, reading)]
 
 
 def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
@@ -190,7 +204,8 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
 
     graphemes = []
     for token in TOKENIZER_A.tokenize(japanese):
-        graphemes += _split_token_graphemes(
-            token.surface(), token.reading_form(), split_rendaku
-        )
+        if (reading := token.reading_form()):
+            graphemes += _split_token_graphemes(
+                token.surface(), reading, split_rendaku
+            )
     return _GraphemeList(graphemes)
