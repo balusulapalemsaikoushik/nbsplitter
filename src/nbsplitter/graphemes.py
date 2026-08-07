@@ -1,3 +1,18 @@
+# Copyright 2026 Sai Koushik Balusulapalem
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from functools import lru_cache
@@ -109,12 +124,12 @@ def _get_kanjidic2():
     return ET.parse(KANJIDIC2_PATH).getroot()
 
 
-def _get_voiced_readings(readings: list[str]):
-    voiced_readings = []
+def _get_voiced_readings(readings: set[str]):
+    voiced_readings = set()
     for reading in readings:
         has_voiced_mora = any(mora in reading[1:] for mora in VOICED_MORA)
         if (first_mora := reading[0]) in RENDAKU_TABLE and (not has_voiced_mora):
-            voiced_readings.append(RENDAKU_TABLE[first_mora] + reading[1:])
+            voiced_readings.add(RENDAKU_TABLE[first_mora] + reading[1:])
     return voiced_readings
 
 
@@ -132,22 +147,22 @@ def _get_readings(japanese: str, include_voiced: bool = False):
             on_readings = kanji.findall(".//reading[@r_type='ja_on']")
             kun_readings = kanji.findall(".//reading[@r_type='ja_kun']")
             readings = (
-                [on_reading.text for on_reading in on_readings]
-                + [_normalize_kun(kun_reading.text) for kun_reading in kun_readings]
+                {on_reading.text for on_reading in on_readings}
+                | {_normalize_kun(kun_reading.text) for kun_reading in kun_readings}
             )
         else:
             return [hira2kata(japanese)]
     else:
-        readings = [TOKENIZER_C.tokenize(japanese)[0].reading_form()]
+        readings = {"".join(token.reading_form() for token in TOKENIZER_C.tokenize(japanese))}
     starts_with_kana = (
         ("\u3040" <= japanese[0] <= "\u309f")  # Hiragana
         or ("\u30a0" <= japanese[0] <= "\u30ff")  # Katakana
     )
-    return (
-        readings + _get_voiced_readings(readings)
+    return sorted(list(
+        readings | _get_voiced_readings(readings)
         if (not starts_with_kana) and include_voiced
         else readings
-    )
+    ), key=len, reverse=True)
 
 
 def _split_token_graphemes(
@@ -183,7 +198,11 @@ def _split_token_graphemes(
                         reading_split = reading_right
                         break
         surface_right += 1
-    return graphemes if graphemes else [_Grapheme(surface, reading)]
+    return (
+        graphemes
+        if "".join(grapheme.reading_form() for grapheme in graphemes) == reading
+        else [_Grapheme(surface, reading)]
+    )
 
 
 def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
@@ -195,8 +214,8 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
             graphemes later on. This option may interpret compounds whose
             latter parts happen to be the voiced equivalents of unvoiced
             counterparts as examples of rendaku when they should not be
-            considered as such. If True latter parts of a compound affected by
-            rendaku are treated as separate graphemes.
+            considered as such. If True latter parts of a multi-kanji compound
+            affected by rendaku are treated as separate graphemes.
 
     Returns:
         A GraphemeList representing the split text.

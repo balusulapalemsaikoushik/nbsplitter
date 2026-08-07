@@ -4,13 +4,29 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nbsplitter"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
-    { "name"="Sai Koushik Balusulapalem" },
+    { "name"="Sai Koushik Balusulapalem", email="balusulapalem.saikoushik@gmail.com" },
 ]
 requires-python = ">=3.9"
 license = "Apache-2.0"
 readme = "README.md"
+keywords = ["japanese", "grapheme", "kanji"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Text Processing",
+    "Topic :: Text Processing :: Linguistic",
+]
 
 dynamic = ["dependencies"]
 
