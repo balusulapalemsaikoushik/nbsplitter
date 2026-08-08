@@ -25,6 +25,7 @@ from sudachipy import Dictionary
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
 
+# Miscellaneous particles that can neither be considered kanji nor kana
 MISC_READINGS = {
     "ヶ": ["カ", "ガ", "コ"],
 }
@@ -62,7 +63,8 @@ class Grapheme(ABC):
 
     Represents the smallest unit of written text that maintains its intended
     pronunciation. Can either be a single character or a multi-character
-    compound with a distinct pronunciation.
+    compound with a distinct pronunciation (see
+    https://en.wikipedia.org/wiki/Kanji#Special_readings).
     """
 
     @abstractmethod
@@ -128,12 +130,16 @@ def _get_voiced_readings(readings: set[str]):
     voiced_readings = set()
     for reading in readings:
         has_voiced_mora = any(mora in reading[1:] for mora in VOICED_MORA)
+        # See Lyman's Law (https://en.wikipedia.org/wiki/Rendaku#Lyman's_law).
         if (first_mora := reading[0]) in RENDAKU_TABLE and (not has_voiced_mora):
             voiced_readings.add(RENDAKU_TABLE[first_mora] + reading[1:])
     return voiced_readings
 
 
 def _normalize_kun(kun: str):
+    # Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
+    # (separated from core reading by ".") and affix markers ("-")
+
     return hira2kata(kun.split(".")[0].replace("-", ""))
 
 
@@ -151,6 +157,11 @@ def _get_readings(japanese: str, include_voiced: bool = False):
                 | {_normalize_kun(kun_reading.text) for kun_reading in kun_readings}
             )
         else:
+            # If a single character that bears a reading isn't a kanji or
+            # miscellaneous particle, it must be a kana; the following leaves
+            # katakana untouched while converting hiragana to katakana as
+            # needed.
+
             return [hira2kata(japanese)]
     else:
         readings = {"".join(token.reading_form() for token in TOKENIZER_C.tokenize(japanese))}
@@ -160,15 +171,54 @@ def _get_readings(japanese: str, include_voiced: bool = False):
     )
     return sorted(list(
         readings | _get_voiced_readings(readings)
+        # Kana inherently account for voiced readings
         if (not starts_with_kana) and include_voiced
         else readings
-    ), key=len, reverse=True)
+    ), key=len, reverse=True)  # We want to check longer readings first
 
 
 def _split_token_graphemes(
         surface: str,
         reading: str,
         split_rendaku: bool = False) -> list[Grapheme]:
+    # Ok im going to explain this because its a bit convoluted
+    # 
+    # We begin by declaring left, split, and right pointers that correspond to
+    # indices in the surface string. We similarly define left and split
+    # pointers for the reading string, but the right pointer must be defined
+    # dynamically because kanji readings can be of various lengths (as
+    # explained later). For all intents and purposes, left < split < right.
+    # 
+    # These pointers allow us to define two substrings of the surface string
+    # (referred to here as "frames") that I call the "leading" frame (left to
+    # split) and "lagging" frame (left to right). Note that the lagging frame
+    # is only defined once we have a grapheme added to our list (hence why it
+    # "lags"). Also notice that the leading frame comprises the end of the
+    # lagging frame, which is crucial to fix the algorithm's mistakes later on.
+    # These will also be defined for the reading string, but again, kanji
+    # readings can be of various lengths, so we cannot assign them values
+    # immediately.
+    # 
+    # On every iteration, we first check each of the readings of the surface
+    # leading frame to see if one equals the reading leading frame (the reading
+    # right pointer is defined based on the length of each of the surface
+    # leading frame's readings). If we find a match, we greedily add the
+    # surface leading frame/reading leading frame combination to our list of
+    # graphemes, shift the start of the lagging frame to the start of the
+    # previous leading frame, and shift the start of the leading frame to the
+    # next unread character.
+    # 
+    # If the check fails on the leading frame, we perform the same check but
+    # use the lagging frame instead (if it's defined). If we find a match here,
+    # we assume the algorithm made a mistake and replace the previously added
+    # grapheme with the surface lagging frame/reading lagging frame combination
+    # but still shift the start of the leading frame to the next unread
+    # character.
+    # 
+    # Regardless of whether these checks pass or fail, the right pointer moves
+    # forward so that we can update the leading frame on each iteration. The
+    # loop terminates once the surface right pointer goes out of bound.
+
     graphemes = []
     surface_left, surface_split, surface_right = None, 0, 1
     reading_left, reading_split = None, 0
@@ -215,7 +265,8 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
             latter parts happen to be the voiced equivalents of unvoiced
             counterparts as examples of rendaku when they should not be
             considered as such. If True latter parts of a multi-kanji compound
-            affected by rendaku are treated as separate graphemes.
+            affected by rendaku (see https://en.wikipedia.org/wiki/Rendaku) are
+            treated as separate graphemes.
 
     Returns:
         A GraphemeList representing the split text.
@@ -223,7 +274,7 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
 
     graphemes = []
     for token in TOKENIZER_A.tokenize(japanese):
-        if (reading := token.reading_form()):
+        if (reading := token.reading_form()):  # Exclude punctuation
             graphemes += _split_token_graphemes(
                 token.surface(), reading, split_rendaku
             )

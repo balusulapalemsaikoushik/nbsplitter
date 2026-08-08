@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nbsplitter"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
     { "name"="Sai Koushik Balusulapalem", email="balusulapalem.saikoushik@gmail.com" },
 ]
@@ -29,6 +29,9 @@ classifiers = [
 ]
 
 dynamic = ["dependencies"]
+
+[project.urls]
+Source = "https://github.com/balusulapalemsaikoushik/nbsplitter"
 
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"

@@ -2,6 +2,10 @@
 
 A tool for splitting Japanese text into graphemes (i.e. the smallest unit of written text that preserves pronunciation).
 
+## Context
+
+Splitting Japanese graphemes as defined here isn't exactly a straightforward task. Ignoring kana (since each character neatly maps to a single pronunciation), there are quite a few nuances to consider: each individual kanji has several possible readings, certain groupings of kanji must be considered unique graphemes because their pronunciations aren't obtainable by merely combining individual kanji readings, and so on. This package elegantly handles the vast majority of these exceptions under the hood and exposes a single interface for splitting graphemes as desired.
+
 ## Usage
 
 ```pycon
@@ -76,7 +80,8 @@ A single grapheme.
 
 Represents the smallest unit of written text that maintains its intended
 pronunciation. Can either be a single character or a multi-character
-compound with a distinct pronunciation.
+compound with a distinct pronunciation (see
+https://en.wikipedia.org/wiki/Kanji#Special_readings).
 
 
 #### Grapheme.reading_form()
@@ -110,7 +115,8 @@ graphemes later on. This option may interpret compounds whose
 latter parts happen to be the voiced equivalents of unvoiced
 counterparts as examples of rendaku when they should not be
 considered as such. If True latter parts of a multi-kanji compound
-affected by rendaku are treated as separate graphemes.
+affected by rendaku (see https://en.wikipedia.org/wiki/Rendaku) are
+treated as separate graphemes.
 
 Returns:
 * A GraphemeList representing the split text.
