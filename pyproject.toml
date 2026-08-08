@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nbsplitter"
-version = "0.1.4"
+version = "1.0.0"
 authors = [
     { "name"="Sai Koushik Balusulapalem", email="balusulapalem.saikoushik@gmail.com" },
 ]
