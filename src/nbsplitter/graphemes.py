@@ -25,9 +25,10 @@ from sudachipy import Dictionary
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
 
-# Miscellaneous particles that can neither be considered kanji nor kana
+# Submorphemic particles that can neither be considered kanji nor kana
 MISC_READINGS = {
     "ヶ": ["カ", "ガ", "コ"],
+    "ヵ": ["カ", "ガ", "コ"],
 }
 
 RENDAKU_TABLE = {
@@ -158,9 +159,9 @@ def _get_readings(japanese: str, include_voiced: bool = False):
             )
         else:
             # If a single character that bears a reading isn't a kanji or
-            # miscellaneous particle, it must be a kana; the following leaves
-            # katakana untouched while converting hiragana to katakana as
-            # needed.
+            # miscellaneous submorphemic particle, it must be a kana; the
+            # following leaves katakana untouched while converting hiragana to
+            # katakana as needed.
 
             return [hira2kata(japanese)]
     else:
@@ -193,11 +194,11 @@ def _split_token_graphemes(
     # (referred to here as "frames") that I call the "leading" frame (left to
     # split) and "lagging" frame (left to right). Note that the lagging frame
     # is only defined once we have a grapheme added to our list (hence why it
-    # "lags"). Also notice that the leading frame comprises the end of the
-    # lagging frame, which is crucial to fix the algorithm's mistakes later on.
-    # These will also be defined for the reading string, but again, kanji
-    # readings can be of various lengths, so we cannot assign them values
-    # immediately.
+    # "lags"); it exists to ensure that the algorithm can correct itself in
+    # case it prematurely considers the leading frame an independent grapheme
+    # when it isn't (as explained later). These will also be defined for the
+    # reading string, but again, kanji readings can be of various lengths, so
+    # we cannot assign them values immediately.
     # 
     # On every iteration, we first check each of the readings of the surface
     # leading frame to see if one equals the reading leading frame (the reading
@@ -208,16 +209,17 @@ def _split_token_graphemes(
     # previous leading frame, and shift the start of the leading frame to the
     # next unread character.
     # 
-    # If the check fails on the leading frame, we perform the same check but
-    # use the lagging frame instead (if it's defined). If we find a match here,
-    # we assume the algorithm made a mistake and replace the previously added
-    # grapheme with the surface lagging frame/reading lagging frame combination
-    # but still shift the start of the leading frame to the next unread
-    # character.
+    # If the check fails on the leading frame and we have graphemes added to
+    # our list, we perform the same check but use the lagging frame instead to
+    # see if our algorithm made a mistake when adding the most recent grapheme.
+    # If we find a match here, we quickly correct ourselves by replacing the
+    # previously added grapheme with the surface lagging frame/reading lagging
+    # frame combination but still shift the start of the leading frame to the
+    # next unread character.
     # 
     # Regardless of whether these checks pass or fail, the right pointer moves
-    # forward so that we can update the leading frame on each iteration. The
-    # loop terminates once the surface right pointer goes out of bound.
+    # forward so that we can test for new graphemes on each iteration. The loop
+    # terminates once the surface right pointer goes out of bound.
 
     graphemes = []
     surface_left, surface_split, surface_right = None, 0, 1
