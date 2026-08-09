@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nbsplitter"
-version = "1.0.0"
+version = "1.0.0.post1"
+description = "A tool for splitting Japanese text into graphemes."
 authors = [
     { "name"="Sai Koushik Balusulapalem", email="balusulapalem.saikoushik@gmail.com" },
 ]
