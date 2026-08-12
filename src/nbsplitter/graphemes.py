@@ -55,9 +55,6 @@ RENDAKU_TABLE = {
 }
 VOICED_MORA = {mora for mora in RENDAKU_TABLE.values()}
 
-TOKENIZER_A = Dictionary(dict="full").create(mode="A")
-TOKENIZER_C = Dictionary(dict="full").create(mode="C")
-
 
 class Grapheme(ABC):
     """A single grapheme.
@@ -127,6 +124,11 @@ def _get_kanjidic2():
     return ET.parse(KANJIDIC2_PATH).getroot()
 
 
+@lru_cache(maxsize=1)
+def _get_sudachi_dict():
+    return Dictionary(dict="full")
+
+
 def _get_voiced_readings(readings: set[str]):
     voiced_readings = set()
     for reading in readings:
@@ -165,7 +167,7 @@ def _get_readings(japanese: str, include_voiced: bool = False):
 
             return [hira2kata(japanese)]
     else:
-        readings = {"".join(token.reading_form() for token in TOKENIZER_C.tokenize(japanese))}
+        readings = {morpheme.reading_form() for morpheme in _get_sudachi_dict().lookup(japanese)}
     starts_with_kana = (
         ("\u3040" <= japanese[0] <= "\u309f")  # Hiragana
         or ("\u30a0" <= japanese[0] <= "\u30ff")  # Katakana
@@ -275,7 +277,8 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
     """
 
     graphemes = []
-    for token in TOKENIZER_A.tokenize(japanese):
+    tokenizer = _get_sudachi_dict().create(mode="A")
+    for token in tokenizer.tokenize(japanese):
         if (reading := token.reading_form()):  # Exclude punctuation
             graphemes += _split_token_graphemes(
                 token.surface(), reading, split_rendaku
