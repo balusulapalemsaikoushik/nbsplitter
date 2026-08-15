@@ -80,8 +80,7 @@ A single grapheme.
 
 Represents the smallest unit of written text that maintains its intended
 pronunciation. Can either be a single character or a multi-character
-compound with a distinct pronunciation (see
-https://en.wikipedia.org/wiki/Kanji#Special_readings).
+compound with a distinct pronunciation.
 
 
 #### Grapheme.reading_form()

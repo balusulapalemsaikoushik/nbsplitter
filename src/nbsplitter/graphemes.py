@@ -61,8 +61,7 @@ class Grapheme(ABC):
 
     Represents the smallest unit of written text that maintains its intended
     pronunciation. Can either be a single character or a multi-character
-    compound with a distinct pronunciation (see
-    https://en.wikipedia.org/wiki/Kanji#Special_readings).
+    compound with a distinct pronunciation.
     """
 
     @abstractmethod
@@ -177,80 +176,137 @@ def _get_readings(japanese: str, include_voiced: bool = False):
         # Kana inherently account for voiced readings
         if (not starts_with_kana) and include_voiced
         else readings
-    ), key=len, reverse=True)  # We want to check longer readings first
+    ), key=len, reverse=True)  # We want to prioritize longer readings
 
 
 def _split_token_graphemes(
         surface: str,
         reading: str,
         split_rendaku: bool = False) -> list[Grapheme]:
-    # Ok im going to explain this because its a bit convoluted
+    # The following algorithm splits a morpheme into graphemes. Sudachi makes
+    # this very convenient since it provides us with the surface (original
+    # Japanese form) and appropriate reading (katakana form) of a given
+    # morpheme.
     # 
-    # We begin by declaring left, split, and right pointers that correspond to
-    # indices in the surface string. We similarly define left and split
-    # pointers for the reading string, but the right pointer must be defined
-    # dynamically because kanji readings can be of various lengths (as
-    # explained later). For all intents and purposes, left < split < right.
+    # Im sorry in advance if this explanation doesnt make sense
     # 
-    # These pointers allow us to define two substrings of the surface string
-    # (referred to here as "frames") that I call the "leading" frame (left to
-    # split) and "lagging" frame (left to right). Note that the lagging frame
-    # is only defined once we have a grapheme added to our list (hence why it
-    # "lags"); it exists to ensure that the algorithm can correct itself in
-    # case it prematurely considers the leading frame an independent grapheme
-    # when it isn't (as explained later). These will also be defined for the
-    # reading string, but again, kanji readings can be of various lengths, so
-    # we cannot assign them values immediately.
+    # For now, understand that we declare left, split, and right pointers that
+    # are used to define substrings (referred to here as "frames") of the
+    # surface string and reading string (prefixed by surface_ and reading_
+    # accordingly). reading_right, however, must be defined dynamically because
+    # kanji readings can be of various lengths (this will make sense later).
+    # For all intents and purposes, left < split < right. reading_valid is a
+    # flag we use to add desirable readings to valid_readings.
     # 
-    # On every iteration, we first check each of the readings of the surface
-    # leading frame to see if one equals the reading leading frame (the reading
-    # right pointer is defined based on the length of each of the surface
-    # leading frame's readings). If we find a match, we greedily add the
-    # surface leading frame/reading leading frame combination to our list of
-    # graphemes, shift the start of the lagging frame to the start of the
-    # previous leading frame, and shift the start of the leading frame to the
-    # next unread character.
+    # While surface_right is not out of bound:
     # 
-    # If the check fails on the leading frame and we have graphemes added to
-    # our list, we perform the same check but use the lagging frame instead to
-    # see if our algorithm made a mistake when adding the most recent grapheme.
-    # If we find a match here, we quickly correct ourselves by replacing the
-    # previously added grapheme with the surface lagging frame/reading lagging
-    # frame combination but still shift the start of the leading frame to the
-    # next unread character.
+    # Firstly, we iterate over all the readings of what I call the surface's
+    # "leading" frame (split to right). The length of each reading allows us to
+    # define a right pointer for the reading string, and, by extension, a
+    # corresponding leading frame for it too. At every iteration, we check to
+    # see if the surface leading frame reading equals the reading leading
+    # frame; if it does, we (set reading_valid to True, empty valid_readings if
+    # some still exist from a previous grapheme, and) add the reading to
+    # valid_readings accordingly. After the loop terminates, if reading_valid
+    # is True, we pop the first (longest) reading from valid_readings, greedily
+    # add it to graphemes, shift the left pointer to the start of the leading
+    # frame, and shift the split pointer to the next unread character.
     # 
-    # Regardless of whether these checks pass or fail, the right pointer moves
-    # forward so that we can test for new graphemes on each iteration. The loop
-    # terminates once the surface right pointer goes out of bound.
+    # If the leading check fails (and surface_left is defined i.e. the length
+    # of graphemes >= 1) we check each valid_reading of the previous grapheme's
+    # valid_readings (shorter ones that were still a match) alongside each of
+    # the current leading frame's readings to see if we accidentally added a
+    # longer reading than we should have. Generally, this is quite rare because
+    # the longest match rule applies rather nicely to kanji readings, but it
+    # sometimes fails, such as in certain cases of ateji (see
+    # https://en.wikipedia.org/wiki/Ateji). Combining each valid_reading and
+    # surface_leading_reading yields what I call the surface's "lagging" frame
+    # (left to right) reading, whose length allows us to define a right pointer
+    # for the reading string, and, by extension, a corresponding lagging frame
+    # for it too. If at any point the surface lagging frame reading equals the
+    # reading lagging frame, we update the most recent grapheme with its
+    # shorter reading, add the leading frame to graphemes, shift the surface
+    # left pointer to the start of the leading frame (doing the same for the
+    # reading left pointer, adjusting for the fact that the current reading
+    # split pointer is ahead due to the incorrect previous reading), shift
+    # the split pointer to the next unread character, empty valid_readings,
+    # and immediately exit the nested loop.
+    # 
+    # If the lagging check fails (or, more likely, doesn't execute at all), we
+    # perform the exact same check that we did on the leading frame using what
+    # I call the surface's "parent" frame (also left to right) in case we
+    # prematurely considered the previous leading frame an independent grapheme
+    # when it wasn't. This is particularly helpful in identifying jukugo (see
+    # https://en.wikipedia.org/wiki/Kanji#Special_readings). After the loop
+    # terminates, if reading_valid is True, we pop the longest reading from
+    # valid_readings as we did with the leading frame but replace the
+    # previously added grapheme with the lagging frame instead of adding an
+    # entirely new one, still shifting the split pointer to the next unread
+    # character.
+    # 
+    # Regardless of whether these checks pass or fail, surface_right moves
+    # forward so that we can test for new graphemes on the next iteration.
 
     graphemes = []
     surface_left, surface_split, surface_right = None, 0, 1
     reading_left, reading_split = None, 0
+    reading_valid, valid_readings = False, []
     while surface_right <= len(surface):
         surface_leading = surface[surface_split:surface_right]
-        for surface_leading_reading in (
+        surface_leading_readings = (
             _get_readings(surface_leading, include_voiced=split_rendaku)
-        ):
+        )
+        for surface_leading_reading in surface_leading_readings:
             reading_right = reading_split + len(surface_leading_reading)
             reading_leading = reading[reading_split:reading_right]
             if surface_leading_reading == reading_leading:
-                graphemes.append(_Grapheme(surface_leading, reading_leading))
-                surface_left, surface_split = surface_split, surface_right
-                reading_left, reading_split = reading_split, reading_right
-                break
+                if not reading_valid:
+                    reading_valid, valid_readings = True, []
+                valid_readings.append(reading_leading)
+        if reading_valid:
+            reading_leading = valid_readings.pop(0)
+            reading_right = reading_split + len(reading_leading)
+            graphemes.append(_Grapheme(surface_leading, reading_leading))
+            surface_left, surface_split = surface_split, surface_right
+            reading_left, reading_split = reading_split, reading_right
+            reading_valid = False
         else:
             if surface_left is not None:
-                surface_lagging = surface[surface_left:surface_right]
-                for surface_lagging_reading in (
-                    _get_readings(surface_lagging, include_voiced=split_rendaku)
-                ):
-                    reading_right = reading_left + len(surface_lagging_reading)
-                    reading_lagging = reading[reading_left:reading_right]
-                    if surface_lagging_reading == reading_lagging:
-                        graphemes[-1] = _Grapheme(surface_lagging, reading_lagging)
+                for valid_reading in valid_readings:
+                    for surface_leading_reading in surface_leading_readings:
+                        surface_lagging_reading = valid_reading + surface_leading_reading
+                        reading_right = reading_left + len(surface_lagging_reading)
+                        reading_lagging = reading[reading_left:reading_right]
+                        if surface_lagging_reading == reading_lagging:
+                            graphemes[-1] = _Grapheme(graphemes[-1].surface(), valid_reading)
+                            graphemes.append(_Grapheme(surface_leading, surface_leading_reading))
+                            surface_left, surface_split = surface_split, surface_right
+                            reading_left, reading_split = (
+                                reading_split - len(surface_leading_reading), reading_right
+                            )
+                            valid_readings = []
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    surface_parent = surface[surface_left:surface_right]
+                    for surface_parent_reading in (
+                        _get_readings(surface_parent, include_voiced=split_rendaku)
+                    ):
+                        reading_right = reading_left + len(surface_parent_reading)
+                        reading_parent = reading[reading_left:reading_right]
+                        if surface_parent_reading == reading_parent:
+                            if not reading_valid:
+                                reading_valid, valid_readings = True, []
+                            valid_readings.append(reading_parent)
+                    if reading_valid:
+                        reading_parent = valid_readings.pop(0)
+                        reading_right = reading_left + len(reading_parent)
+                        graphemes[-1] = _Grapheme(surface_parent, reading_parent)
                         surface_split = surface_right
                         reading_split = reading_right
-                        break
+                        reading_valid = False
         surface_right += 1
     return (
         graphemes
