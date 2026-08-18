@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from functools import lru_cache
 from importlib.resources import files
+import re
 import xml.etree.ElementTree as ET
 
 from jaconv import hira2kata
@@ -24,6 +25,18 @@ from sudachipy import Dictionary
 
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
+
+SOKUON = {"ッ", "っ"}
+YOON = {
+    "ャ", "ュ", "ョ",
+    "ゃ", "ゅ", "ょ",
+}
+CHOON = {"ー"}
+SMALL_VOWELS = {
+    "ァ", "ィ", "ゥ", "ェ", "ォ",
+    "ぁ", "ぃ", "ぅ", "ぇ", "ぉ",
+}
+KANA_MODIFIERS = SOKUON | YOON | CHOON | SMALL_VOWELS
 
 # Submorphemic particles that can neither be considered kanji nor kana
 MISC_READINGS = {
@@ -128,6 +141,18 @@ def _get_sudachi_dict():
     return Dictionary(dict="full")
 
 
+def _is_kana(japanese: str):
+    kana_pattern = r"^[\u3040-\u309f\u30a0-\u30ff]+$"
+    return bool(re.fullmatch(kana_pattern, japanese))
+
+
+def _normalize_kun(kun: str):
+    # Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
+    # (separated from core reading by ".") and affix markers ("-")
+
+    return hira2kata(kun.split(".")[0].replace("-", ""))
+
+
 def _get_voiced_readings(readings: set[str]):
     voiced_readings = set()
     for reading in readings:
@@ -138,43 +163,36 @@ def _get_voiced_readings(readings: set[str]):
     return voiced_readings
 
 
-def _normalize_kun(kun: str):
-    # Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
-    # (separated from core reading by ".") and affix markers ("-")
-
-    return hira2kata(kun.split(".")[0].replace("-", ""))
-
-
 def _get_readings(japanese: str, include_voiced: bool = False):
+    if japanese in KANA_MODIFIERS or japanese[-1] in SOKUON:
+        # Forces kana modifiers to be parsed in the parent frame, sokuon by the
+        # next parent frame specifically (see _split_token_graphemes).
+
+        return []
+    if japanese in MISC_READINGS:
+        return MISC_READINGS[japanese]
+    if _is_kana(japanese):
+        return [hira2kata(japanese)]  # Leaves katakana untouched
+    readings = set()
     if len(japanese) == 1:
-        if japanese in MISC_READINGS:
-            return MISC_READINGS[japanese]
         kanjidic2 = _get_kanjidic2()
         kanji = kanjidic2.find(f".//character[literal='{japanese}']")
         if kanji is not None:
             on_readings = kanji.findall(".//reading[@r_type='ja_on']")
             kun_readings = kanji.findall(".//reading[@r_type='ja_kun']")
-            readings = (
+            readings |= (
                 {on_reading.text for on_reading in on_readings}
                 | {_normalize_kun(kun_reading.text) for kun_reading in kun_readings}
             )
-        else:
-            # If a single character that bears a reading isn't a kanji or
-            # miscellaneous submorphemic particle, it must be a kana; the
-            # following leaves katakana untouched while converting hiragana to
-            # katakana as needed.
-
-            return [hira2kata(japanese)]
     else:
-        readings = {morpheme.reading_form() for morpheme in _get_sudachi_dict().lookup(japanese)}
-    starts_with_kana = (
-        ("\u3040" <= japanese[0] <= "\u309f")  # Hiragana
-        or ("\u30a0" <= japanese[0] <= "\u30ff")  # Katakana
-    )
+        readings |= {
+            morpheme.reading_form()
+            for morpheme in _get_sudachi_dict().lookup(japanese)
+        }
     return sorted(list(
         readings | _get_voiced_readings(readings)
         # Kana inherently account for voiced readings
-        if (not starts_with_kana) and include_voiced
+        if (not _is_kana(japanese[0])) and include_voiced
         else readings
     ), key=len, reverse=True)  # We want to prioritize longer readings
 
@@ -333,10 +351,21 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
     """
 
     graphemes = []
+    sokuon_end = None
     tokenizer = _get_sudachi_dict().create(mode="A")
     for token in tokenizer.tokenize(japanese):
         if (reading := token.reading_form()):  # Exclude punctuation
+            surface = token.surface()
+
+            # Pushes a sokuon at the end of one token to the start of the next
+            if sokuon_end is not None:
+                surface, reading = sokuon_end + surface, "ッ" + reading
+                sokuon_end = None
+            if surface[-1] in SOKUON:
+                sokuon_end = surface[-1]
+                surface, reading = surface[:-1], reading[:-1]
+
             graphemes += _split_token_graphemes(
-                token.surface(), reading, split_rendaku
+                surface, reading, split_rendaku
             )
     return _GraphemeList(graphemes)
