@@ -2,10 +2,6 @@
 
 A tool for splitting Japanese text into graphemes (i.e. the smallest unit of written text that preserves pronunciation).
 
-## Context
-
-Splitting Japanese graphemes as defined here isn't exactly a straightforward task. Ignoring kana (since each character neatly maps to a single pronunciation), there are quite a few nuances to consider: each individual kanji has several possible readings, certain groupings of kanji must be considered unique graphemes because their pronunciations aren't obtainable by merely combining individual kanji readings, and so on. This package elegantly handles the vast majority of these exceptions under the hood and exposes a single interface for splitting graphemes as desired.
-
 ## Usage
 
 ```pycon
@@ -16,6 +12,16 @@ Splitting Japanese graphemes as defined here isn't exactly a straightforward tas
 >>> print(graphemes.reading_form())
 ['ヒガシ', 'ヤマト', 'シ']
 ```
+
+## Context
+
+Note the use of the phrase "_preserves_ pronunciation" in the description above; it is impossible to define a "grapheme" without first explaining the very act of _splitting_ text into graphemes to begin with. In summary,
+
+> Splitting graphemes is the act of dividing written text into the smallest units possible while ensuring each unit bears a valid pronunciation (in the case of kanji, a valid reading) that reflects its actual pronunciation in the broader string of text. That is to say, by examining an individual unit, it should be evident how exactly that unit is pronounced within the original text.
+
+Technically speaking, this falls outside most definitions of a "grapheme" as it excludes a number of characters that affect pronunciation, but the term most closely coincides with what the intention of this package is.
+
+However, splitting Japanese graphemes as described above isn't exactly a straightforward task. For instance, each individual kanji has several possible readings, certain kanji groupings must be considered unique graphemes because their pronunciations aren't obtainable by merely combining individual readings, and there exist numerous whole-character kana modifiers and dependent characters that don't bear individual pronunciations at all. This package elegantly handles the vast majority of such exceptions under the hood and exposes a single interface for splitting graphemes as desired.
 
 ## Known Limitations
 

@@ -26,17 +26,20 @@ from sudachipy import Dictionary
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
 
-SOKUON = {"ッ", "っ"}
-YOON = {
-    "ャ", "ュ", "ョ",
-    "ゃ", "ゅ", "ょ",
-}
+SOKUON = "ッ"
+
+YOON = {"ャ", "ュ", "ョ"}
 CHOON = {"ー"}
-SMALL_VOWELS = {
-    "ァ", "ィ", "ゥ", "ェ", "ォ",
-    "ぁ", "ぃ", "ぅ", "ぇ", "ぉ",
+SMALL_VOWELS = {"ァ", "ィ", "ゥ", "ェ", "ォ"}
+KANA_MODIFIERS = YOON | CHOON | SMALL_VOWELS
+
+E_ROW = {"エ", "ケ", "セ", "テ", "ネ", "ヘ", "メ", "レ", "ゲ", "ゼ", "デ", "ベ", "ペ"}
+O_ROW = {
+    "オ", "コ", "ソ", "ト", "ノ", "ホ", "モ", "ヨ", "ロ", "ゴ", "ゾ", "ド", "ボ", "ポ",
+    "ョ",
 }
-KANA_MODIFIERS = SOKUON | YOON | CHOON | SMALL_VOWELS
+E_OFFGLIDE = "イ"
+O_OFFGLIDE = "ウ"
 
 # Submorphemic particles that can neither be considered kanji nor kana
 MISC_READINGS = {
@@ -159,16 +162,13 @@ def _get_voiced_readings(readings: set[str]):
         has_voiced_mora = any(mora in reading[1:] for mora in VOICED_MORA)
         # See Lyman's Law (https://en.wikipedia.org/wiki/Rendaku#Lyman's_law).
         if (first_mora := reading[0]) in RENDAKU_TABLE and (not has_voiced_mora):
-            voiced_readings.add(RENDAKU_TABLE[first_mora] + reading[1:])
+            voiced_reading = RENDAKU_TABLE[first_mora] + reading[1:]
+            if voiced_reading not in readings:
+                voiced_readings.add(voiced_reading)
     return voiced_readings
 
 
 def _get_readings(japanese: str, include_voiced: bool = False):
-    if japanese in KANA_MODIFIERS or japanese[-1] in SOKUON:
-        # Forces kana modifiers to be parsed in the parent frame, sokuon by the
-        # next parent frame specifically (see _split_token_graphemes).
-
-        return []
     if japanese in MISC_READINGS:
         return MISC_READINGS[japanese]
     if _is_kana(japanese):
@@ -197,10 +197,38 @@ def _get_readings(japanese: str, include_voiced: bool = False):
     ), key=len, reverse=True)  # We want to prioritize longer readings
 
 
+def _clean_token_graphemes(graphemes: list[Grapheme]):
+    cleaned = []
+    prev = None
+    for grapheme in graphemes:
+        surface, reading = grapheme.surface(), grapheme.reading_form()
+        if (
+            prev is not None
+            and (
+                prev == SOKUON
+                or reading in KANA_MODIFIERS
+                or (
+                    _is_kana(surface)
+                    and (
+                        (prev[-1] in O_ROW and reading == O_OFFGLIDE)
+                        or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
+                    )
+                )
+            )
+        ):
+            new_surface, new_reading = (
+                cleaned[-1].surface() + surface,
+                cleaned[-1].reading_form() + reading,
+            )
+            cleaned[-1] = _Grapheme(new_surface, new_reading)
+        else:
+            cleaned.append(grapheme)
+        prev = reading
+    return cleaned
+
+
 def _split_token_graphemes(
-        surface: str,
-        reading: str,
-        split_rendaku: bool = False) -> list[Grapheme]:
+        surface: str, reading: str, split_rendaku: bool = False):
     # The following algorithm splits a morpheme into graphemes. Sudachi makes
     # this very convenient since it provides us with the surface (original
     # Japanese form) and appropriate reading (katakana form) of a given
@@ -354,18 +382,18 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
     sokuon_end = None
     tokenizer = _get_sudachi_dict().create(mode="A")
     for token in tokenizer.tokenize(japanese):
-        if (reading := token.reading_form()):  # Exclude punctuation
-            surface = token.surface()
+        if token.part_of_speech()[0] != "補助記号":  # Exclude punctuation/symbols
+            surface, reading = token.surface(), token.reading_form()
 
             # Pushes a sokuon at the end of one token to the start of the next
             if sokuon_end is not None:
-                surface, reading = sokuon_end + surface, "ッ" + reading
+                surface, reading = sokuon_end + surface, SOKUON + reading
                 sokuon_end = None
-            if surface[-1] in SOKUON:
+            if reading[-1] == SOKUON:
                 sokuon_end = surface[-1]
                 surface, reading = surface[:-1], reading[:-1]
 
-            graphemes += _split_token_graphemes(
-                surface, reading, split_rendaku
+            graphemes += _clean_token_graphemes(
+                _split_token_graphemes(surface, reading, split_rendaku)
             )
     return _GraphemeList(graphemes)
