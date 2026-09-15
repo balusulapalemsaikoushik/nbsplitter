@@ -205,7 +205,7 @@ def _clean_token_graphemes(graphemes: list[Grapheme]):
         if (
             prev is not None
             and (
-                prev == SOKUON
+                prev[-1] == SOKUON
                 or reading in KANA_MODIFIERS
                 or (
                     _is_kana(surface)
@@ -379,19 +379,21 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
     """
 
     graphemes = []
-    sokuon_end = None
+    surface_sokuon, reading_sokuon = None, None
     tokenizer = _get_sudachi_dict().create(mode="A")
     for token in tokenizer.tokenize(japanese):
         if token.part_of_speech()[0] != "補助記号":  # Exclude punctuation/symbols
             surface, reading = token.surface(), token.reading_form()
 
-            # Pushes a sokuon at the end of one token to the start of the next
-            if sokuon_end is not None:
-                surface, reading = sokuon_end + surface, SOKUON + reading
-                sokuon_end = None
+            # Appends a token with a sokuon at the end to the start of the next
+            if surface_sokuon is not None:
+                surface, reading = (
+                    surface_sokuon + surface, reading_sokuon + reading
+                )
+                surface_sokuon, reading_sokuon = None, None
             if reading[-1] == SOKUON:
-                sokuon_end = surface[-1]
-                surface, reading = surface[:-1], reading[:-1]
+                surface_sokuon, reading_sokuon = surface, reading
+                continue
 
             graphemes += _clean_token_graphemes(
                 _split_token_graphemes(surface, reading, split_rendaku)
