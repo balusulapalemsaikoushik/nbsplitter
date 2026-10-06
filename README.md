@@ -25,19 +25,31 @@ However, splitting Japanese graphemes as described above isn't exactly a straigh
 
 ## Known Limitations
 
-### Inability to differentiate between rendaku and arbitrary unvoiced-to-voiced consonant changes
+### Inability to differentiate between unvoiced-to-voiced consonant changes and some inherently voiced readings
 
-As noted in the documentation below, the splitter algorithm cannot definitively distinguish between examples of true rendaku and multi-kanji graphemes whose second component appears to be read as the voiced equivalent of one of its standalone readings. For example, consider the output below:
+Although the splitter algorithm is able to correctly identify most instances of deliberate unvoiced-to-voiced consonant changes within a word, it cannot definitively distinguish such examples from words in which the voiced counterpart of an unvoiced kanji reading was chosen solely for its phonetic value or (although rare) in which an unvoiced kanji reading of foreign origin was simply borrowed into Japanese as its voiced counterpart, constituting a completely valid, standalone reading that wasn't affected by an intentional change in voicing but wasn't in the algorithm's kanji dictionary either. As a result, disabling the option to split voiced readings may treat these inherently voiced readings as dependent on the graphemes around it, when this shouldn't happen in practice. For example, consider the output below:
 
 ```python
-graphemes = split_graphemes("富士", split_rendaku=True)
+graphemes = split_graphemes("富士", split_voiced=False)
 print(graphemes.reading_form())
-# Output: ['フ', 'ジ']  <-- WRONG: should be ['フジ']
+# Output: ['フジ']  <-- WRONG: should be ['フ', 'ジ']
 ```
 
-This occurs because the kanji 士 can be read as シ, so the algorithm interprets the ジ found in the grapheme's actual reading as an intentional change in voicing (i.e. rendaku) when in practice the grapheme 富士 cannot be split (although this may reveal a thing or two about historical changes in pronunciation, I wouldn't say it's particularly useful for parsing modern Japanese).
+This occurs because the intended reading ジ chosen for the kanji 士 isn't present in the algorithm's kanji dictionary, so the kanji is treated as dependent on the character immediately prior and the entire string is interpreted as a single grapheme.
 
-If this behavior is undesirable, simply disable the option to split graphemes affected by rendaku, at the cost of compound words such as 船橋 being treated as a single grapheme. May be fixed in a future update.
+Along with the ability to exert granular control over splitting by type of voicing, this may be fixed in a future update.
+
+### Certain strings bearing non-kana readings
+
+Because the splitter algorithm relies on a multi-step process that begins with the tokenization of the input string, it can only be as accurate as the tokenizer itself, and, in some cases, the tokenizer yields a token reading that isn't written in katakana like expected. For instance,
+
+```python
+graphemes = split_graphemes("送品")
+print(graphemes.reading_form())
+# Output: ['送品']  <-- WRONG: should be ['ソウ', 'ヒン']
+```
+
+This may be fixed in a future update.
 
 ## API Reference
 
@@ -115,13 +127,18 @@ Splits Japanese text into graphemes.
 
 Args:
 * **japanese**: The text to be split.
-* **split_rendaku**: NOT RECOMMENDED: Use only if intending on verifying
-graphemes later on. This option may interpret compounds whose
-latter parts happen to be the voiced equivalents of unvoiced
-counterparts as examples of rendaku when they should not be
-considered as such. If True latter parts of a multi-kanji compound
-affected by rendaku (see https://en.wikipedia.org/wiki/Rendaku) are
-treated as separate graphemes.
+* **split_voiced**: If True the voiced counterparts of voiceless kanji
+readings will be treated as standalone readings, most notably in
+instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
+* **split_rendaku**: DEPRECATED: This parameter is no longer used and will be
+removed in version 2.0.0; use split_voiced instead. NOT
+RECOMMENDED: Use only if intending on verifying graphemes later on.
+This option may interpret compounds whose latter parts happen to be
+the voiced equivalents of unvoiced counterparts as examples of
+rendaku when they should not be considered as such. If True latter
+parts of a multi-kanji compound affected by rendaku (see
+https://en.wikipedia.org/wiki/Rendaku) are treated as separate
+graphemes.
 
 Returns:
 * A GraphemeList representing the split text.

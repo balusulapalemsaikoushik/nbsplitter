@@ -69,7 +69,7 @@ RENDAKU_TABLE = {
     "ヘ": "ベ",
     "ホ": "ボ",
 }
-VOICED_MORA = {mora for mora in RENDAKU_TABLE.values()}
+VOICED_MORAE = {mora for mora in RENDAKU_TABLE.values()}
 
 
 class Grapheme(ABC):
@@ -149,6 +149,13 @@ def _is_kana(japanese: str):
     return bool(re.fullmatch(kana_pattern, japanese))
 
 
+def _normalize_on(on: str):
+    # Remove suffix markers associated with some instances of renjo (see
+    # https://en.wikipedia.org/wiki/Japanese_phonology#Renj%C5%8D)
+
+    return on.replace("-", "")
+
+
 def _normalize_kun(kun: str):
     # Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
     # (separated from core reading by ".") and affix markers ("-")
@@ -159,7 +166,20 @@ def _normalize_kun(kun: str):
 def _get_voiced_readings(readings: set[str]):
     voiced_readings = set()
     for reading in readings:
-        has_voiced_mora = any(mora in reading[1:] for mora in VOICED_MORA)
+        if (first_mora := reading[0]) in RENDAKU_TABLE:
+            voiced_reading = RENDAKU_TABLE[first_mora] + reading[1:]
+            if voiced_reading not in readings:
+                voiced_readings.add(voiced_reading)
+    return voiced_readings
+
+
+def _get_rendaku_readings(readings: set[str]):
+    # Soon-to-be deprecated, although a more robust approach to classifying
+    # rendaku may be implemented in a future update
+
+    voiced_readings = set()
+    for reading in readings:
+        has_voiced_mora = any(mora in reading[1:] for mora in VOICED_MORAE)
         # See Lyman's Law (https://en.wikipedia.org/wiki/Rendaku#Lyman's_law).
         if (first_mora := reading[0]) in RENDAKU_TABLE and (not has_voiced_mora):
             voiced_reading = RENDAKU_TABLE[first_mora] + reading[1:]
@@ -168,7 +188,10 @@ def _get_voiced_readings(readings: set[str]):
     return voiced_readings
 
 
-def _get_readings(japanese: str, include_voiced: bool = False):
+def _get_readings(
+        japanese: str,
+        include_voiced: bool = True,
+        include_rendaku: bool = False):
     if japanese in MISC_READINGS:
         return MISC_READINGS[japanese]
     if _is_kana(japanese):
@@ -178,23 +201,29 @@ def _get_readings(japanese: str, include_voiced: bool = False):
         kanjidic2 = _get_kanjidic2()
         kanji = kanjidic2.find(f".//character[literal='{japanese}']")
         if kanji is not None:
-            on_readings = kanji.findall(".//reading[@r_type='ja_on']")
-            kun_readings = kanji.findall(".//reading[@r_type='ja_kun']")
-            readings |= (
-                {on_reading.text for on_reading in on_readings}
-                | {_normalize_kun(kun_reading.text) for kun_reading in kun_readings}
-            )
+            on_readings = {
+                _normalize_on(on_reading.text)
+                for on_reading in kanji.findall(".//reading[@r_type='ja_on']")
+            }
+            kun_readings = {
+                _normalize_kun(kun_reading.text)
+                for kun_reading in kanji.findall(".//reading[@r_type='ja_kun']")
+            }
+            readings |= on_readings | kun_readings
+        # Generally speaking, if the character isn't found in the dictionary,
+        # it probably doesn't have an independent reading
     else:
         readings |= {
             morpheme.reading_form()
             for morpheme in _get_sudachi_dict().lookup(japanese)
         }
-    return sorted(list(
-        readings | _get_voiced_readings(readings)
-        # Kana inherently account for voiced readings
-        if (not _is_kana(japanese[0])) and include_voiced
-        else readings
-    ), key=len, reverse=True)  # We want to prioritize longer readings
+    if not _is_kana(japanese[0]):  # Kana inherently account for voicing
+        if include_rendaku:
+            readings |= _get_rendaku_readings(readings)
+        if include_voiced:
+            readings |= _get_voiced_readings(readings)
+    # We want to prioritize longer readings
+    return sorted(list(readings), key=len, reverse=True)
 
 
 def _clean_token_graphemes(graphemes: list[Grapheme]):
@@ -228,7 +257,10 @@ def _clean_token_graphemes(graphemes: list[Grapheme]):
 
 
 def _split_token_graphemes(
-        surface: str, reading: str, split_rendaku: bool = False):
+        surface: str,
+        reading: str,
+        split_voiced: bool = True,
+        split_rendaku: bool = False):
     # The following algorithm splits a morpheme into graphemes. Sudachi makes
     # this very convenient since it provides us with the surface (original
     # Japanese form) and appropriate reading (katakana form) of a given
@@ -300,7 +332,11 @@ def _split_token_graphemes(
     while surface_right <= len(surface):
         surface_leading = surface[surface_split:surface_right]
         surface_leading_readings = (
-            _get_readings(surface_leading, include_voiced=split_rendaku)
+            _get_readings(
+                surface_leading,
+                include_voiced=split_voiced,
+                include_rendaku=split_rendaku,
+            )
         )
         for surface_leading_reading in surface_leading_readings:
             reading_right = reading_split + len(surface_leading_reading)
@@ -338,7 +374,11 @@ def _split_token_graphemes(
                 else:
                     surface_parent = surface[surface_left:surface_right]
                     for surface_parent_reading in (
-                        _get_readings(surface_parent, include_voiced=split_rendaku)
+                        _get_readings(
+                            surface_parent,
+                            include_voiced=split_voiced,
+                            include_rendaku=split_rendaku,
+                        )
                     ):
                         reading_right = reading_left + len(surface_parent_reading)
                         reading_parent = reading[reading_left:reading_right]
@@ -361,18 +401,27 @@ def _split_token_graphemes(
     )
 
 
-def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
+def split_graphemes(
+        japanese: str,
+        split_voiced: bool = True,
+        *,
+        split_rendaku: bool = False) -> GraphemeList:
     """Splits Japanese text into graphemes.
 
     Args:
         japanese: The text to be split.
-        split_rendaku: NOT RECOMMENDED: Use only if intending on verifying
-            graphemes later on. This option may interpret compounds whose
-            latter parts happen to be the voiced equivalents of unvoiced
-            counterparts as examples of rendaku when they should not be
-            considered as such. If True latter parts of a multi-kanji compound
-            affected by rendaku (see https://en.wikipedia.org/wiki/Rendaku) are
-            treated as separate graphemes.
+        split_voiced: If True the voiced counterparts of voiceless kanji
+            readings will be treated as standalone readings, most notably in
+            instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
+        split_rendaku: DEPRECATED: This parameter is no longer used and will be
+            removed in version 2.0.0; use split_voiced instead. NOT
+            RECOMMENDED: Use only if intending on verifying graphemes later on.
+            This option may interpret compounds whose latter parts happen to be
+            the voiced equivalents of unvoiced counterparts as examples of
+            rendaku when they should not be considered as such. If True latter
+            parts of a multi-kanji compound affected by rendaku (see
+            https://en.wikipedia.org/wiki/Rendaku) are treated as separate
+            graphemes.
 
     Returns:
         A GraphemeList representing the split text.
@@ -396,6 +445,11 @@ def split_graphemes(japanese: str, split_rendaku: bool = False) -> GraphemeList:
                 continue
 
             graphemes += _clean_token_graphemes(
-                _split_token_graphemes(surface, reading, split_rendaku)
+                _split_token_graphemes(
+                    surface,
+                    reading,
+                    split_voiced,
+                    split_rendaku,
+                )
             )
     return _GraphemeList(graphemes)
