@@ -239,7 +239,11 @@ def _get_readings(
     return sorted(list(readings), key=len, reverse=True)
 
 
-def _clean_token_graphemes(graphemes: list[Grapheme]):
+def _clean_token_graphemes(
+        graphemes: list[Grapheme],
+        split_sokuon: bool = False,
+        split_modifiers: bool = False,
+        split_offglides: bool = False):
     cleaned = []
     prev = None
     for grapheme in graphemes:
@@ -247,10 +251,11 @@ def _clean_token_graphemes(graphemes: list[Grapheme]):
         if (
             prev is not None
             and (
-                prev[-1] == SOKUON
-                or reading in KANA_MODIFIERS
+                ((not split_sokuon) and prev[-1] == SOKUON)
+                or ((not split_modifiers) and reading in KANA_MODIFIERS)
                 or (
-                    _is_kana(surface)
+                    (not split_offglides)
+                    and _is_kana(surface)
                     and (
                         (prev[-1] in O_ROW and reading == O_OFFGLIDE)
                         or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
@@ -420,7 +425,10 @@ def _split_token_graphemes(
 def split_graphemes(
         japanese: str,
         split_voiced: bool = True,
-        split_clipped: bool = True,
+        split_sokuon: bool = False,
+        split_modifiers: bool = False,
+        split_offglides: bool = False,
+        split_clipped: bool | None = None,
         *,
         split_rendaku: bool = False) -> GraphemeList:
     """Splits Japanese text into graphemes.
@@ -430,23 +438,39 @@ def split_graphemes(
         split_voiced: If True the voiced counterparts of voiceless kanji
             readings will be treated as standalone readings, most notably in
             instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
+        split_sokuon: If True the sokuon (see
+            https://en.wikipedia.org/wiki/Sokuon) will be treated as an
+            independent grapheme.
+        split_modifiers: If True yoon (see
+            https://en.wikipedia.org/wiki/Y%C5%8Don), choon (see
+            https://en.wikipedia.org/wiki/Ch%C5%8Donpu), and small vowels will
+            be treated as independent graphemes.
+        split_offglides: If True offglide vowels (the "i" in "ei" or the "u" in
+            "ou") will be treated as independent graphemes.
         split_clipped: If True the clipped versions of on'yomi readings
             whose last mora can be clipped to a sokuon will be treated as
             standalone readings (see
             https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination).
+            Note that split_sokuon must be True for this behavior to be active.
         split_rendaku: DEPRECATED: This parameter is no longer used and will be
-            removed in version 2.0.0; use split_voiced instead. NOT
-            RECOMMENDED: Use only if intending on verifying graphemes later on.
-            This option may interpret compounds whose latter parts happen to be
-            the voiced equivalents of unvoiced counterparts as examples of
-            rendaku when they should not be considered as such. If True latter
-            parts of a multi-kanji compound affected by rendaku (see
-            https://en.wikipedia.org/wiki/Rendaku) are treated as separate
-            graphemes.
+            removed in version 2.0.0; use split_voiced instead for similar
+            functionality. NOT RECOMMENDED: Use only if intending on verifying
+            graphemes later on. This option may interpret compounds whose
+            latter parts happen to be the voiced equivalents of unvoiced
+            counterparts as examples of rendaku when they should not be
+            considered as such. If True latter parts of a multi-kanji compound
+            affected by rendaku (see https://en.wikipedia.org/wiki/Rendaku) are
+            treated as separate graphemes.
 
     Returns:
         A GraphemeList representing the split text.
+    
+    Raises:
+        ValueError: If split_sokuon is False and split_clipped is not None.
     """
+
+    if (not split_sokuon) and (split_clipped is not None):
+        raise ValueError("Cannot set split_clipped when split_sokuon is False")
 
     graphemes = []
     surface_sokuon, reading_sokuon = None, None
@@ -454,17 +478,16 @@ def split_graphemes(
     for token in tokenizer.tokenize(japanese):
         if token.part_of_speech()[0] != "補助記号":  # Exclude punctuation/symbols
             surface, reading = token.surface(), token.reading_form()
-
-            # Appends a token with a sokuon at the end to the start of the next
-            if surface_sokuon is not None:
-                surface, reading = (
-                    surface_sokuon + surface, reading_sokuon + reading
-                )
-                surface_sokuon, reading_sokuon = None, None
-            if reading[-1] == SOKUON:
-                surface_sokuon, reading_sokuon = surface, reading
-                continue
-
+            if not split_sokuon:
+                # Appends a token with a sokuon at the end to the start of the next
+                if surface_sokuon is not None:
+                    surface, reading = (
+                        surface_sokuon + surface, reading_sokuon + reading
+                    )
+                    surface_sokuon, reading_sokuon = None, None
+                if reading[-1] == SOKUON:
+                    surface_sokuon, reading_sokuon = surface, reading
+                    continue
             graphemes += _clean_token_graphemes(
                 _split_token_graphemes(
                     surface,
@@ -472,6 +495,9 @@ def split_graphemes(
                     split_voiced,
                     split_clipped,
                     split_rendaku,
-                )
+                ),
+                split_sokuon,
+                split_modifiers,
+                split_offglides,
             )
     return _GraphemeList(graphemes)

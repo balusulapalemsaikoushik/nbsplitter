@@ -73,6 +73,11 @@ def outl_func(doc):
         cog.outl()
         cog.outl("Returns:")
         cog.outl(f"* {doc.returns.description}")
+    if doc.raises:
+        cog.outl()
+        cog.outl("Raises:")
+        for e in doc.raises:
+            cog.outl(f"* **{e.type_name}**: {e.description}")
 
 def outl_member(name, member, parent=None):
     if not name.startswith("_") and (doc := member.__doc__):
@@ -130,22 +135,35 @@ Args:
 * **split_voiced**: If True the voiced counterparts of voiceless kanji
 readings will be treated as standalone readings, most notably in
 instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
-* **split_clipped**: If True the clipped versions of Sino-Japanese readings
+* **split_sokuon**: If True the sokuon (see
+https://en.wikipedia.org/wiki/Sokuon) will be treated as an
+independent grapheme.
+* **split_modifiers**: If True yoon (see
+https://en.wikipedia.org/wiki/Y%C5%8Don), choon (see
+https://en.wikipedia.org/wiki/Ch%C5%8Donpu), and small vowels will
+be treated as independent graphemes.
+* **split_offglides**: If True offglide vowels (the "i" in "ei" or the "u" in
+"ou") will be treated as independent graphemes.
+* **split_clipped**: If True the clipped versions of on'yomi readings
 whose last mora can be clipped to a sokuon will be treated as
 standalone readings (see
 https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination).
+Note that split_sokuon must be True for this behavior to be active.
 * **split_rendaku**: DEPRECATED: This parameter is no longer used and will be
-removed in version 2.0.0; use split_voiced instead. NOT
-RECOMMENDED: Use only if intending on verifying graphemes later on.
-This option may interpret compounds whose latter parts happen to be
-the voiced equivalents of unvoiced counterparts as examples of
-rendaku when they should not be considered as such. If True latter
-parts of a multi-kanji compound affected by rendaku (see
-https://en.wikipedia.org/wiki/Rendaku) are treated as separate
-graphemes.
+removed in version 2.0.0; use split_voiced instead for similar
+functionality. NOT RECOMMENDED: Use only if intending on verifying
+graphemes later on. This option may interpret compounds whose
+latter parts happen to be the voiced equivalents of unvoiced
+counterparts as examples of rendaku when they should not be
+considered as such. If True latter parts of a multi-kanji compound
+affected by rendaku (see https://en.wikipedia.org/wiki/Rendaku) are
+treated as separate graphemes.
 
 Returns:
 * A GraphemeList representing the split text.
+
+Raises:
+* **ValueError**: If split_sokuon is False and split_clipped is not None.
 
 <!--[[[end]]]-->
 
