@@ -130,6 +130,10 @@ Args:
 * **split_voiced**: If True the voiced counterparts of voiceless kanji
 readings will be treated as standalone readings, most notably in
 instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
+* **split_clipped**: If True the clipped versions of Sino-Japanese readings
+whose last mora can be clipped to a sokuon will be treated as
+standalone readings (see
+https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination).
 * **split_rendaku**: DEPRECATED: This parameter is no longer used and will be
 removed in version 2.0.0; use split_voiced instead. NOT
 RECOMMENDED: Use only if intending on verifying graphemes later on.

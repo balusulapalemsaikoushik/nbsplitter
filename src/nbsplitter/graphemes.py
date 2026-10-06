@@ -47,6 +47,8 @@ MISC_READINGS = {
     "ヵ": ["カ", "ガ", "コ"],
 }
 
+CLIPPABLE_MORAE = {"ツ", "チ", "ク", "き"}
+
 RENDAKU_TABLE = {
     "カ": "ガ",
     "キ": "ギ",
@@ -156,6 +158,14 @@ def _normalize_on(on: str):
     return on.replace("-", "")
 
 
+def _get_clipped_readings(readings: set[str]):
+    clipped_readings = set()
+    for reading in readings:
+        if reading[-1] in CLIPPABLE_MORAE:
+            clipped_readings.add(reading[:-1] + SOKUON)
+    return clipped_readings
+
+
 def _normalize_kun(kun: str):
     # Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
     # (separated from core reading by ".") and affix markers ("-")
@@ -191,6 +201,7 @@ def _get_rendaku_readings(readings: set[str]):
 def _get_readings(
         japanese: str,
         include_voiced: bool = True,
+        include_clipped: bool = True,
         include_rendaku: bool = False):
     if japanese in MISC_READINGS:
         return MISC_READINGS[japanese]
@@ -205,6 +216,8 @@ def _get_readings(
                 _normalize_on(on_reading.text)
                 for on_reading in kanji.findall(".//reading[@r_type='ja_on']")
             }
+            if include_clipped:
+                on_readings |= _get_clipped_readings(on_readings)
             kun_readings = {
                 _normalize_kun(kun_reading.text)
                 for kun_reading in kanji.findall(".//reading[@r_type='ja_kun']")
@@ -260,6 +273,7 @@ def _split_token_graphemes(
         surface: str,
         reading: str,
         split_voiced: bool = True,
+        split_clipped: bool = True,
         split_rendaku: bool = False):
     # The following algorithm splits a morpheme into graphemes. Sudachi makes
     # this very convenient since it provides us with the surface (original
@@ -335,6 +349,7 @@ def _split_token_graphemes(
             _get_readings(
                 surface_leading,
                 include_voiced=split_voiced,
+                include_clipped=split_clipped,
                 include_rendaku=split_rendaku,
             )
         )
@@ -377,6 +392,7 @@ def _split_token_graphemes(
                         _get_readings(
                             surface_parent,
                             include_voiced=split_voiced,
+                            include_clipped=split_clipped,
                             include_rendaku=split_rendaku,
                         )
                     ):
@@ -404,6 +420,7 @@ def _split_token_graphemes(
 def split_graphemes(
         japanese: str,
         split_voiced: bool = True,
+        split_clipped: bool = True,
         *,
         split_rendaku: bool = False) -> GraphemeList:
     """Splits Japanese text into graphemes.
@@ -413,6 +430,10 @@ def split_graphemes(
         split_voiced: If True the voiced counterparts of voiceless kanji
             readings will be treated as standalone readings, most notably in
             instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
+        split_clipped: If True the clipped versions of on'yomi readings
+            whose last mora can be clipped to a sokuon will be treated as
+            standalone readings (see
+            https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination).
         split_rendaku: DEPRECATED: This parameter is no longer used and will be
             removed in version 2.0.0; use split_voiced instead. NOT
             RECOMMENDED: Use only if intending on verifying graphemes later on.
@@ -449,6 +470,7 @@ def split_graphemes(
                     surface,
                     reading,
                     split_voiced,
+                    split_clipped,
                     split_rendaku,
                 )
             )
