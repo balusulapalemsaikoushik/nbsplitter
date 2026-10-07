@@ -13,16 +13,15 @@
 # limitations under the License.
 
 
+import re
+import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from functools import lru_cache
 from importlib.resources import files
-import re
-import xml.etree.ElementTree as ET
 
 from jaconv import hira2kata
 from sudachipy import Dictionary
-
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
 
@@ -124,6 +123,10 @@ class _Grapheme(Grapheme):
     def reading_form(self):
         return self._reading
 
+    def __repr__(self):
+        return self._surface
+    __str__ = __repr__
+
 
 class GraphemeList(ABC):
     """A list of graphemes."""
@@ -136,6 +139,10 @@ class GraphemeList(ABC):
     @abstractmethod
     def reading_form(self) -> list[str]:
         """A list containing every grapheme's reading form (in katakana)."""
+        pass
+
+    @abstractmethod
+    def __getitem__(self, index: int) -> Grapheme:
         pass
 
 
@@ -154,6 +161,10 @@ class _GraphemeList(Sequence, GraphemeList):
 
     def reading_form(self):
         return [grapheme.reading_form() for grapheme in self._graphemes]
+
+    def __repr__(self):
+        return " ".join(self.surface())
+    __str__ = __repr__
 
 
 @lru_cache(maxsize=1)
@@ -451,7 +462,10 @@ def _split_token_graphemes(
         surface_right += 1
     return (
         graphemes
-        if "".join(grapheme.reading_form() for grapheme in graphemes) == reading
+        if (
+            "".join(grapheme.surface() for grapheme in graphemes) == surface
+            and "".join(grapheme.reading_form() for grapheme in graphemes) == reading
+        )
         else [_Grapheme(surface, reading)]
     )
 
