@@ -546,44 +546,51 @@ def split_graphemes(
     surface_sokuon = reading_sokuon = None
     surface_hatsuon = reading_hatsuon = None
     tokenizer = _get_sudachi_dict().create(mode="A")
-    for token in tokenizer.tokenize(japanese):
+    tokens = tokenizer.tokenize(japanese)
+    for (idx, token) in enumerate(tokens):
         if token.part_of_speech()[0] != "補助記号":  # Exclude punctuation/symbols
             surface, reading = token.surface(), token.reading_form()
-            if not split_sokuon:
-                # Appends a token with a sokuon at the end to the start of the next
-                if surface_sokuon is not None:
-                    surface, reading = (
-                        surface_sokuon + surface, reading_sokuon + reading
-                    )
-                    surface_sokuon = reading_sokuon = None
-                if reading[-1] == SOKUON:
+            if surface_sokuon is not None:
+                # Appends a token with a final sokuon to the start of the next
+                surface, reading = (
+                    surface_sokuon + surface, reading_sokuon + reading
+                )
+                surface_sokuon = reading_sokuon = None
+            elif surface_hatsuon is not None:
+                # Appends a token with a final hatsuon to the start of the next
+                surface, reading = (
+                    surface_hatsuon + surface, reading_hatsuon + reading
+                )
+                surface_hatsuon = reading_hatsuon = None
+            if idx != len(tokens) - 1:  # Allow sokuon/hatsuon at end of string
+                if (not split_sokuon) and reading[-1] == SOKUON:
                     surface_sokuon, reading_sokuon = surface, reading
                     continue
-            if not split_hatsuon:
-                # Appends a token with a hatsuon at the end to the start of the next
-                if surface_hatsuon is not None:
-                    surface, reading = (
-                        surface_hatsuon + surface, reading_hatsuon + reading
-                    )
-                    surface_hatsuon = reading_hatsuon = None
-                if reading[-1] == HATSUON:
+                elif (not split_hatsuon) and reading[-1] == HATSUON:
                     surface_hatsuon, reading_hatsuon = surface, reading
                     continue
-            graphemes += _clean_token_graphemes(
-                _split_token_graphemes(
-                    surface,
-                    reading,
-                    split_voiced,
-                    split_clipped,
-                    split_rendaku,
-                ),
-                split_sokuon,
-                split_hatsuon,
-                split_modifiers,
-                split_long,
-                split_offglides,
-            )
         else:
-            surface_sokuon = reading_sokuon = None
-            surface_hatsuon = reading_hatsuon = None
+            # Allow sokuon/hatsuon before punctuation
+            if surface_sokuon is not None:
+                surface, reading = surface_sokuon, reading_sokuon
+            elif surface_hatsuon is not None:
+                surface, reading = surface_hatsuon, reading_hatsuon
+            else:
+                surface_sokuon = reading_sokuon = None
+                surface_hatsuon = reading_hatsuon = None
+                continue
+        graphemes += _clean_token_graphemes(
+            _split_token_graphemes(
+                surface,
+                reading,
+                split_voiced,
+                split_clipped,
+                split_rendaku,
+            ),
+            split_sokuon,
+            split_hatsuon,
+            split_modifiers,
+            split_long,
+            split_offglides,
+        )
     return _GraphemeList(graphemes)
