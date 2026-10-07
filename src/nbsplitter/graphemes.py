@@ -490,11 +490,13 @@ def split_graphemes(
             readings will be treated as standalone readings, most notably in
             instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
         split_sokuon: If True the sokuon (see
-            https://en.wikipedia.org/wiki/Sokuon) will be treated as an
-            independent grapheme.
+            https://en.wikipedia.org/wiki/Sokuon) and phonetically indivisble
+            units of text ending with a sokuon will be treated as independent
+            graphemes.
         split_hatsuon: If True the hatsuon (see
-            https://en.wikipedia.org/wiki/Japanese_phonology#Moraic_nasal) will
-            be treated as an independent grapheme.
+            https://en.wikipedia.org/wiki/Japanese_phonology#Moraic_nasal) and
+            phonetically indivisble units of text ending with a hatsuon will
+            be treated as independent graphemes.
         split_modifiers: If True yoon (see
             https://en.wikipedia.org/wiki/Y%C5%8Don), choon (see
             https://en.wikipedia.org/wiki/Ch%C5%8Donpu), and small vowels will
