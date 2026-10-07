@@ -138,12 +138,19 @@ instances of rendaku (see https://en.wikipedia.org/wiki/Rendaku).
 * **split_sokuon**: If True the sokuon (see
 https://en.wikipedia.org/wiki/Sokuon) will be treated as an
 independent grapheme.
+* **split_hatsuon**: If True the hatsuon (see
+https://en.wikipedia.org/wiki/Japanese_phonology#Moraic_nasal) will
+be treated as an independent grapheme.
 * **split_modifiers**: If True yoon (see
 https://en.wikipedia.org/wiki/Y%C5%8Don), choon (see
 https://en.wikipedia.org/wiki/Ch%C5%8Donpu), and small vowels will
 be treated as independent graphemes.
-* **split_offglides**: If True offglide vowels (the "i" in "ei" or the "u" in
-"ou") will be treated as independent graphemes.
+* **split_long**: If True kana used to lengthen vowel sounds that are
+normally pronounced as that same vowel sound will be treated as
+independent graphemes.
+* **split_offglides**: If True offglide kana (the "i" in "ei" or the "u" in
+"ou") solely used to lengthen vowel sounds will be treated as
+independent graphemes.
 * **split_clipped**: If True the clipped versions of on'yomi readings
 whose last mora can be clipped to a sokuon will be treated as
 standalone readings (see

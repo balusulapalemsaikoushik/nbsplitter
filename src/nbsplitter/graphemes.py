@@ -33,13 +33,33 @@ CHOON = {"ー"}
 SMALL_VOWELS = {"ァ", "ィ", "ゥ", "ェ", "ォ"}
 KANA_MODIFIERS = YOON | CHOON | SMALL_VOWELS
 
+A_ROW = {
+    "ア", "カ", "サ", "タ", "ナ", "ハ", "マ", "ヤ", "ラ", "ワ", "ガ", "ザ", "ダ", "バ", "パ",
+    "ャ",
+}
+I_ROW = {
+    "イ", "キ", "シ", "チ", "ニ", "ヒ", "ミ", "リ", "ギ", "ジ", "ヂ", "ビ", "ピ",
+}
+U_ROW = {
+    "ウ", "ク", "ス", "ツ", "ヌ", "フ", "ム", "ユ", "ル", "グ", "ズ", "ヅ", "ブ", "プ",
+    "ュ"
+}
 E_ROW = {"エ", "ケ", "セ", "テ", "ネ", "ヘ", "メ", "レ", "ゲ", "ゼ", "デ", "ベ", "ペ"}
 O_ROW = {
     "オ", "コ", "ソ", "ト", "ノ", "ホ", "モ", "ヨ", "ロ", "ゴ", "ゾ", "ド", "ボ", "ポ",
     "ョ",
 }
+
+A_LONG = "ア"
+I_LONG = "イ"
+U_LONG = "ウ"
+E_LONG = "エ"
+O_LONG = "オ"
+
 E_OFFGLIDE = "イ"
 O_OFFGLIDE = "ウ"
+
+HATSUON = "ン"
 
 # Submorphemic particles that can neither be considered kanji nor kana
 MISC_READINGS = {
@@ -242,23 +262,37 @@ def _get_readings(
 def _clean_token_graphemes(
         graphemes: list[Grapheme],
         split_sokuon: bool = False,
+        split_hatsuon: bool = True,
         split_modifiers: bool = False,
+        split_long: bool = True,
         split_offglides: bool = False):
     cleaned = []
     prev = None
     for grapheme in graphemes:
         surface, reading = grapheme.surface(), grapheme.reading_form()
         if (
-            prev is not None
-            and (
+            prev is not None and (
                 ((not split_sokuon) and prev[-1] == SOKUON)
-                or ((not split_modifiers) and reading in KANA_MODIFIERS)
+                or ((not split_hatsuon) and prev[-1] == HATSUON)
                 or (
-                    (not split_offglides)
-                    and _is_kana(surface)
+                    _is_kana(surface)
                     and (
-                        (prev[-1] in O_ROW and reading == O_OFFGLIDE)
-                        or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
+                        (not split_modifiers) and reading in KANA_MODIFIERS
+                    ) or (
+                        (not split_offglides)
+                        and (
+                            (prev[-1] in O_ROW and reading == O_OFFGLIDE)
+                            or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
+                        )
+                    ) or (
+                        (not split_long)
+                        and (
+                            (prev[-1] in A_ROW and reading == A_LONG)
+                            or (prev[-1] in I_ROW and reading == I_LONG)
+                            or (prev[-1] in U_ROW and reading == U_LONG)
+                            or (prev[-1] in E_ROW and reading == E_LONG)
+                            or (prev[-1] in O_ROW and reading == O_LONG)
+                        )
                     )
                 )
             )
@@ -426,7 +460,9 @@ def split_graphemes(
         japanese: str,
         split_voiced: bool = True,
         split_sokuon: bool = False,
+        split_hatsuon: bool = True,
         split_modifiers: bool = False,
+        split_long: bool = True,
         split_offglides: bool = False,
         split_clipped: bool | None = None,
         *,
@@ -441,12 +477,19 @@ def split_graphemes(
         split_sokuon: If True the sokuon (see
             https://en.wikipedia.org/wiki/Sokuon) will be treated as an
             independent grapheme.
+        split_hatsuon: If True the hatsuon (see
+            https://en.wikipedia.org/wiki/Japanese_phonology#Moraic_nasal) will
+            be treated as an independent grapheme.
         split_modifiers: If True yoon (see
             https://en.wikipedia.org/wiki/Y%C5%8Don), choon (see
             https://en.wikipedia.org/wiki/Ch%C5%8Donpu), and small vowels will
             be treated as independent graphemes.
-        split_offglides: If True offglide vowels (the "i" in "ei" or the "u" in
-            "ou") will be treated as independent graphemes.
+        split_long: If True kana used to lengthen vowel sounds that are
+            normally pronounced as that same vowel sound will be treated as
+            independent graphemes.
+        split_offglides: If True offglide kana (the "i" in "ei" or the "u" in
+            "ou") solely used to lengthen vowel sounds will be treated as
+            independent graphemes.
         split_clipped: If True the clipped versions of on'yomi readings
             whose last mora can be clipped to a sokuon will be treated as
             standalone readings (see
@@ -473,7 +516,8 @@ def split_graphemes(
         raise ValueError("Cannot set split_clipped when split_sokuon is False")
 
     graphemes = []
-    surface_sokuon, reading_sokuon = None, None
+    surface_sokuon = reading_sokuon = None
+    surface_hatsuon = reading_hatsuon = None
     tokenizer = _get_sudachi_dict().create(mode="A")
     for token in tokenizer.tokenize(japanese):
         if token.part_of_speech()[0] != "補助記号":  # Exclude punctuation/symbols
@@ -484,9 +528,19 @@ def split_graphemes(
                     surface, reading = (
                         surface_sokuon + surface, reading_sokuon + reading
                     )
-                    surface_sokuon, reading_sokuon = None, None
+                    surface_sokuon = reading_sokuon = None
                 if reading[-1] == SOKUON:
                     surface_sokuon, reading_sokuon = surface, reading
+                    continue
+            if not split_hatsuon:
+                # Appends a token with a hatsuon at the end to the start of the next
+                if surface_hatsuon is not None:
+                    surface, reading = (
+                        surface_hatsuon + surface, reading_hatsuon + reading
+                    )
+                    surface_hatsuon = reading_hatsuon = None
+                if reading[-1] == HATSUON:
+                    surface_hatsuon, reading_hatsuon = surface, reading
                     continue
             graphemes += _clean_token_graphemes(
                 _split_token_graphemes(
@@ -497,7 +551,12 @@ def split_graphemes(
                     split_rendaku,
                 ),
                 split_sokuon,
+                split_hatsuon,
                 split_modifiers,
+                split_long,
                 split_offglides,
             )
+        else:
+            surface_sokuon = reading_sokuon = None
+            surface_hatsuon = reading_hatsuon = None
     return _GraphemeList(graphemes)
