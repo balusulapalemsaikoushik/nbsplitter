@@ -14,6 +14,7 @@
 
 
 import re
+import warnings
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
@@ -22,6 +23,7 @@ from importlib.resources import files
 
 from jaconv import hira2kata
 from sudachipy import Dictionary
+
 
 KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
 
@@ -232,8 +234,8 @@ def _get_rendaku_readings(readings: set[str]):
 def _get_readings(
         japanese: str,
         include_voiced: bool = True,
-        include_clipped: bool = True,
-        include_rendaku: bool = False):
+        include_clipped: bool | None = None,
+        include_rendaku: bool | None = None):
     if japanese in MISC_READINGS:
         return MISC_READINGS[japanese]
     if _is_kana(japanese):
@@ -324,8 +326,8 @@ def _split_token_graphemes(
         surface: str,
         reading: str,
         split_voiced: bool = True,
-        split_clipped: bool = True,
-        split_rendaku: bool = False):
+        split_clipped: bool | None = None,
+        split_rendaku: bool | None = None):
     # The following algorithm splits a morpheme into graphemes. Sudachi makes
     # this very convenient since it provides us with the surface (original
     # Japanese form) and appropriate reading (katakana form) of a given
@@ -481,7 +483,7 @@ def split_graphemes(
         split_offglides: bool = False,
         split_clipped: bool | None = None,
         *,
-        split_rendaku: bool = False) -> GraphemeList:
+        split_rendaku: bool | None = None) -> GraphemeList:
     """Splits Japanese text into graphemes.
 
     Args:
@@ -531,6 +533,14 @@ def split_graphemes(
 
     if (not split_sokuon) and (split_clipped is not None):
         raise ValueError("Cannot set split_clipped when split_sokuon is False")
+
+    if split_rendaku is not None:
+        warnings.warn(
+            "`split_rendaku` is no longer used and will be removed in version 2.0.0; "
+            "use `split_voiced` instead for similar functionality.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
 
     graphemes = []
     surface_sokuon = reading_sokuon = None
