@@ -68,7 +68,7 @@ MISC_READINGS = {
     "ヵ": ["カ", "ガ", "コ"],
 }
 
-CLIPPABLE_MORAE = {"ツ", "チ", "ク", "き"}
+CLIPPABLE_MORAE = {"ツ", "チ", "ク", "キ"}
 
 RENDAKU_TABLE = {
     "カ": "ガ",
