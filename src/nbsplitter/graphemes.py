@@ -289,20 +289,21 @@ def _clean_token_graphemes(
                     _is_kana(surface)
                     and (
                         (not split_modifiers) and reading in KANA_MODIFIERS
-                    ) or (
-                        (not split_offglides)
-                        and (
-                            (prev[-1] in O_ROW and reading == O_OFFGLIDE)
-                            or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
-                        )
-                    ) or (
-                        (not split_long)
-                        and (
-                            (prev[-1] in A_ROW and reading == A_LONG)
-                            or (prev[-1] in I_ROW and reading == I_LONG)
-                            or (prev[-1] in U_ROW and reading == U_LONG)
-                            or (prev[-1] in E_ROW and reading == E_LONG)
-                            or (prev[-1] in O_ROW and reading == O_LONG)
+                        or (
+                            (not split_offglides)
+                            and (
+                                (prev[-1] in O_ROW and reading == O_OFFGLIDE)
+                                or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
+                            )
+                        ) or (
+                            (not split_long)
+                            and (
+                                (prev[-1] in A_ROW and reading == A_LONG)
+                                or (prev[-1] in I_ROW and reading == I_LONG)
+                                or (prev[-1] in U_ROW and reading == U_LONG)
+                                or (prev[-1] in E_ROW and reading == E_LONG)
+                                or (prev[-1] in O_ROW and reading == O_LONG)
+                            )
                         )
                     )
                 )
