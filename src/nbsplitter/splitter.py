@@ -12,264 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import re
 import warnings
-import xml.etree.ElementTree as ET
-from abc import ABC, abstractmethod
-from collections.abc import Sequence
-from functools import lru_cache
-from importlib.resources import files
 
-from jaconv import hira2kata
-from sudachipy import Dictionary
-
-
-KANJIDIC2_PATH = files("nbsplitter").joinpath("data/kanjidic2.xml")
-
-SOKUON = "ッ"
-
-YOON = {"ャ", "ュ", "ョ"}
-CHOON = {"ー"}
-SMALL_VOWELS = {"ァ", "ィ", "ゥ", "ェ", "ォ"}
-KANA_MODIFIERS = YOON | CHOON | SMALL_VOWELS
-
-A_ROW = {
-    "ア", "カ", "サ", "タ", "ナ", "ハ", "マ", "ヤ", "ラ", "ワ", "ガ", "ザ", "ダ", "バ", "パ",
-    "ャ",
-}
-I_ROW = {
-    "イ", "キ", "シ", "チ", "ニ", "ヒ", "ミ", "リ", "ギ", "ジ", "ヂ", "ビ", "ピ",
-}
-U_ROW = {
-    "ウ", "ク", "ス", "ツ", "ヌ", "フ", "ム", "ユ", "ル", "グ", "ズ", "ヅ", "ブ", "プ",
-    "ュ"
-}
-E_ROW = {"エ", "ケ", "セ", "テ", "ネ", "ヘ", "メ", "レ", "ゲ", "ゼ", "デ", "ベ", "ペ"}
-O_ROW = {
-    "オ", "コ", "ソ", "ト", "ノ", "ホ", "モ", "ヨ", "ロ", "ゴ", "ゾ", "ド", "ボ", "ポ",
-    "ョ",
-}
-
-A_LONG = "ア"
-I_LONG = "イ"
-U_LONG = "ウ"
-E_LONG = "エ"
-O_LONG = "オ"
-
-E_OFFGLIDE = "イ"
-O_OFFGLIDE = "ウ"
-
-HATSUON = "ン"
-
-# Submorphemic particles that can neither be considered kanji nor kana
-MISC_READINGS = {
-    "ヶ": ["カ", "ガ", "コ"],
-    "ヵ": ["カ", "ガ", "コ"],
-}
-
-CLIPPABLE_MORAE = {"ツ", "チ", "ク", "キ"}
-
-RENDAKU_TABLE = {
-    "カ": "ガ",
-    "キ": "ギ",
-    "ク": "グ",
-    "ケ": "ゲ",
-    "コ": "ゴ",
-    "サ": "ザ",
-    "シ": "ジ",
-    "ス": "ズ",
-    "セ": "ゼ",
-    "ソ": "ゾ",
-    "タ": "ダ",
-    "チ": "ヂ",
-    "ツ": "ヅ",
-    "テ": "デ",
-    "ト": "ド",
-    "ハ": "バ",
-    "ヒ": "ビ",
-    "フ": "ブ",
-    "ヘ": "ベ",
-    "ホ": "ボ",
-}
-VOICED_MORAE = {mora for mora in RENDAKU_TABLE.values()}
-
-
-class Grapheme(ABC):
-    """A single grapheme.
-
-    Represents the smallest unit of written text that maintains its intended
-    pronunciation. Can either be a single character or a multi-character
-    compound with a distinct pronunciation.
-    """
-
-    @abstractmethod
-    def surface(self) -> str:
-        """The original Japanese form of this grapheme."""
-        pass
-
-    @abstractmethod
-    def reading_form(self) -> str:
-        """The reading form of this grapheme (in katakana)."""
-        pass
-
-
-class _Grapheme(Grapheme):
-    def __init__(self, surface: str, reading: str):
-        self._surface = surface
-        self._reading = reading
-
-    def surface(self):
-        return self._surface
-
-    def reading_form(self):
-        return self._reading
-
-    def __repr__(self):
-        return self._surface
-    __str__ = __repr__
-
-
-class GraphemeList(ABC):
-    """A list of graphemes."""
-
-    @abstractmethod
-    def surface(self) -> list[str]:
-        """A list containing every grapheme's original Japanese form."""
-        pass
-
-    @abstractmethod
-    def reading_form(self) -> list[str]:
-        """A list containing every grapheme's reading form (in katakana)."""
-        pass
-
-    @abstractmethod
-    def __getitem__(self, index: int) -> Grapheme:
-        pass
-
-
-class _GraphemeList(Sequence, GraphemeList):
-    def __init__(self, graphemes: list[Grapheme]):
-        self._graphemes = graphemes
-
-    def __len__(self):
-        return len(self._graphemes)
-
-    def __getitem__(self, index):
-        return self._graphemes[index]
-
-    def surface(self):
-        return [grapheme.surface() for grapheme in self._graphemes]
-
-    def reading_form(self):
-        return [grapheme.reading_form() for grapheme in self._graphemes]
-
-    def __repr__(self):
-        return " ".join(self.surface())
-    __str__ = __repr__
-
-
-@lru_cache(maxsize=1)
-def _get_kanjidic2():
-    return ET.parse(KANJIDIC2_PATH).getroot()
-
-
-@lru_cache(maxsize=1)
-def _get_sudachi_dict():
-    return Dictionary(dict="full")
-
-
-def _is_kana(japanese: str):
-    kana_pattern = r"^[\u3040-\u309f\u30a0-\u30ff]+$"
-    return bool(re.fullmatch(kana_pattern, japanese))
-
-
-def _normalize_on(on: str):
-    # Remove suffix markers associated with some instances of renjo (see
-    # https://en.wikipedia.org/wiki/Japanese_phonology#Renj%C5%8D)
-
-    return on.replace("-", "")
-
-
-def _get_clipped_readings(readings: set[str]):
-    clipped_readings = set()
-    for reading in readings:
-        if reading[-1] in CLIPPABLE_MORAE:
-            clipped_readings.add(reading[:-1] + SOKUON)
-    return clipped_readings
-
-
-def _normalize_kun(kun: str):
-    # Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
-    # (separated from core reading by ".") and affix markers ("-")
-
-    return hira2kata(kun.split(".")[0].replace("-", ""))
-
-
-def _get_voiced_readings(readings: set[str]):
-    voiced_readings = set()
-    for reading in readings:
-        if (first_mora := reading[0]) in RENDAKU_TABLE:
-            voiced_reading = RENDAKU_TABLE[first_mora] + reading[1:]
-            if voiced_reading not in readings:
-                voiced_readings.add(voiced_reading)
-    return voiced_readings
-
-
-def _get_rendaku_readings(readings: set[str]):
-    # Soon-to-be deprecated, although a more robust approach to classifying
-    # rendaku may be implemented in a future update
-
-    voiced_readings = set()
-    for reading in readings:
-        has_voiced_mora = any(mora in reading[1:] for mora in VOICED_MORAE)
-        # See Lyman's Law (https://en.wikipedia.org/wiki/Rendaku#Lyman's_law).
-        if (first_mora := reading[0]) in RENDAKU_TABLE and (not has_voiced_mora):
-            voiced_reading = RENDAKU_TABLE[first_mora] + reading[1:]
-            if voiced_reading not in readings:
-                voiced_readings.add(voiced_reading)
-    return voiced_readings
-
-
-def _get_readings(
-        japanese: str,
-        include_voiced: bool = True,
-        include_clipped: bool | None = None,
-        include_rendaku: bool | None = None):
-    if japanese in MISC_READINGS:
-        return MISC_READINGS[japanese]
-    if _is_kana(japanese):
-        return [hira2kata(japanese)]  # Leaves katakana untouched
-    readings = set()
-    if len(japanese) == 1:
-        kanjidic2 = _get_kanjidic2()
-        kanji = kanjidic2.find(f".//character[literal='{japanese}']")
-        if kanji is not None:
-            on_readings = {
-                _normalize_on(on_reading.text)
-                for on_reading in kanji.findall(".//reading[@r_type='ja_on']")
-            }
-            if include_clipped:
-                on_readings |= _get_clipped_readings(on_readings)
-            kun_readings = {
-                _normalize_kun(kun_reading.text)
-                for kun_reading in kanji.findall(".//reading[@r_type='ja_kun']")
-            }
-            readings |= on_readings | kun_readings
-        # Generally speaking, if the character isn't found in the dictionary,
-        # it probably doesn't have an independent reading
-    else:
-        readings |= {
-            morpheme.reading_form()
-            for morpheme in _get_sudachi_dict().lookup(japanese)
-        }
-    if not _is_kana(japanese[0]):  # Kana inherently account for voicing
-        if include_rendaku:
-            readings |= _get_rendaku_readings(readings)
-        if include_voiced:
-            readings |= _get_voiced_readings(readings)
-    # We want to prioritize longer readings
-    return sorted(list(readings), key=len, reverse=True)
+from . import chars
+from .types import Grapheme, GraphemeList, _Grapheme, _GraphemeList
+from .util import _get_readings, _get_sudachi_dict, _is_kana
 
 
 def _clean_token_graphemes(
@@ -285,26 +32,26 @@ def _clean_token_graphemes(
         surface, reading = grapheme.surface(), grapheme.reading_form()
         if (
             prev is not None and (
-                ((not split_sokuon) and prev[-1] == SOKUON)
-                or ((not split_hatsuon) and prev[-1] == HATSUON)
+                ((not split_sokuon) and prev[-1] == chars.SOKUON)
+                or ((not split_hatsuon) and prev[-1] == chars.HATSUON)
                 or (
                     _is_kana(surface)
                     and (
-                        (not split_modifiers) and reading in KANA_MODIFIERS
+                        (not split_modifiers) and reading in chars.KANA_MODIFIERS
                         or (
                             (not split_offglides)
                             and (
-                                (prev[-1] in O_ROW and reading == O_OFFGLIDE)
-                                or (prev[-1] in E_ROW and reading == E_OFFGLIDE)
+                                (prev[-1] in chars.O_ROW and reading == chars.O_OFFGLIDE)
+                                or (prev[-1] in chars.E_ROW and reading == chars.E_OFFGLIDE)
                             )
                         ) or (
                             (not split_long)
                             and (
-                                (prev[-1] in A_ROW and reading == A_LONG)
-                                or (prev[-1] in I_ROW and reading == I_LONG)
-                                or (prev[-1] in U_ROW and reading == U_LONG)
-                                or (prev[-1] in E_ROW and reading == E_LONG)
-                                or (prev[-1] in O_ROW and reading == O_LONG)
+                                (prev[-1] in chars.A_ROW and reading == chars.A_LONG)
+                                or (prev[-1] in chars.I_ROW and reading == chars.I_LONG)
+                                or (prev[-1] in chars.U_ROW and reading == chars.U_LONG)
+                                or (prev[-1] in chars.E_ROW and reading == chars.E_LONG)
+                                or (prev[-1] in chars.O_ROW and reading == chars.O_LONG)
                             )
                         )
                     )
@@ -563,10 +310,10 @@ def split_graphemes(
                 )
                 surface_hatsuon = reading_hatsuon = None
             if idx != len(tokens) - 1:  # Allow sokuon/hatsuon at end of string
-                if (not split_sokuon) and reading[-1] == SOKUON:
+                if (not split_sokuon) and reading[-1] == chars.SOKUON:
                     surface_sokuon, reading_sokuon = surface, reading
                     continue
-                elif (not split_hatsuon) and reading[-1] == HATSUON:
+                elif (not split_hatsuon) and reading[-1] == chars.HATSUON:
                     surface_hatsuon, reading_hatsuon = surface, reading
                     continue
         else:
