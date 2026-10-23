@@ -1,0 +1,46 @@
+{
+  "name": "nbsplitter",
+  "version": "1.0.0",
+  "description": "A tool for splitting Japanese text into graphemes.",
+  "author": {
+    "name": "Sai Koushik Balusulapalem",
+    "email": "balusulapalem.saikoushik@gmail.com"
+  },
+  "homepage": "https://github.com/balusulapalemsaikoushik/nbsplitter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/balusulapalemsaikoushik/nbsplitter.git",
+    "directory": "js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "prebuild": "node scripts/download.js",
+    "build": "tsc && copyfiles -u 1 src/data/**/* dist/"
+  },
+  "keywords": [
+    "japanese",
+    "grapheme",
+    "kanji"
+  ],
+  "type": "module",
+  "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "copyfiles": "^2.4.1",
+    "node-stream-zip": "^1.16.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "camaro": "^6.7.3",
+    "lru-cache": "^11.5.3",
+    "p-memoize": "^9.0.0",
+    "sudachi-wasm333": "^1.0.4",
+    "wanakana": "^5.3.1"
+  }
+}
