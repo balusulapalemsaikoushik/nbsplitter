@@ -32,7 +32,8 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [project.urls]
-Source = "https://github.com/balusulapalemsaikoushik/nbsplitter"
+Homepage = "https://github.com/balusulapalemsaikoushik/nbsplitter"
+Source = "https://github.com/balusulapalemsaikoushik/nbsplitter/tree/main/python"
 
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
