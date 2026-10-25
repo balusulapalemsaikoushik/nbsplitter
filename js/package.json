@@ -1,6 +1,6 @@
 {
   "name": "nbsplitter",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A tool for splitting Japanese text into graphemes.",
   "author": {
     "name": "Sai Koushik Balusulapalem",
