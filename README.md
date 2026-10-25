@@ -31,7 +31,7 @@ print(graphemes.reading_form())
 ```typescript
 const graphemes = splitGraphemes("富士", { splitVoiced: false });
 console.log(graphemes.readingForm);
-// Output: ["フジ"]  <-- WRONG: should be "'フ", "ジ"]
+// Output: [ 'フジ' ]  <-- WRONG: should be [ 'フ', 'ジ' ]
 ```
 
 This occurs because the intended reading ジ chosen for the kanji 士 isn't present in the algorithm's kanji dictionary, so the kanji is treated as dependent on the character immediately prior and the entire string is interpreted as a single grapheme.
@@ -55,7 +55,7 @@ print(graphemes.reading_form())
 ```typescript
 const graphemes = splitGraphemes("送品");
 console.log(graphemes.readingForm);
-// Output: ["送品"]  <-- WRONG: should be ["ソウ", "ヒン"]
+// Output: [ '送品' ]  <-- WRONG: should be [ 'ソウ', 'ヒン' ]
 ```
 
 This may be fixed in a future update.
