@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "nbsplitter"
 version = "1.1.5"
-description = "A tool for splitting Japanese text into graphemes."
+description = "A tool for manipulating Japanese graphemes."
 authors = [
     { "name"="Sai Koushik Balusulapalem", email="balusulapalem.saikoushik@gmail.com" },
 ]
 requires-python = ">=3.9"
 license = "Apache-2.0"
 readme = "README.md"
-keywords = ["japanese", "grapheme", "kanji"]
+keywords = ["japanese", "grapheme", "kanji", "furigana"]
 classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: MacOS",

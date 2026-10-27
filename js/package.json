@@ -1,7 +1,7 @@
 {
   "name": "nbsplitter",
   "version": "1.0.2",
-  "description": "A tool for splitting Japanese text into graphemes.",
+  "description": "A tool for manipulating Japanese graphemes.",
   "author": {
     "name": "Sai Koushik Balusulapalem",
     "email": "balusulapalem.saikoushik@gmail.com"
@@ -22,7 +22,8 @@
   "keywords": [
     "japanese",
     "grapheme",
-    "kanji"
+    "kanji",
+    "furigana"
   ],
   "type": "module",
   "license": "Apache-2.0",

@@ -1,6 +1,6 @@
 # nbsplitter
 
-A tool for splitting Japanese text into graphemes (i.e. the smallest unit of written text that preserves pronunciation).
+A tool for manipulating Japanese graphemes (i.e. the smallest unit of written text that preserves pronunciation).
 
 ## Context
 
@@ -10,7 +10,7 @@ Though a "grapheme" can broadly be defined as a phonetically indivisble unit of 
 
 Technically speaking, this falls outside many definitions of a grapheme as it excludes a number of characters that affect pronunciation to some degree, but the term most closely coincides with what the intention of this package is.
 
-However, splitting Japanese graphemes as described above isn't exactly a straightforward task. For instance, each individual kanji has several possible readings, certain kanji groupings must be considered unique graphemes because their pronunciations aren't obtainable by merely combining individual readings, and there exist numerous whole-character kana modifiers and dependent characters that don't bear individual pronunciations at all. This package elegantly handles the vast majority of such exceptions under the hood and exposes a single interface for splitting graphemes as desired.
+However, splitting Japanese graphemes as described above isn't exactly a straightforward task. For instance, each individual kanji has several possible readings, certain kanji groupings must be considered unique graphemes because their pronunciations aren't obtainable by merely combining individual readings, and there exist numerous whole-character kana modifiers and dependent characters that don't bear individual pronunciations at all. This package elegantly handles the vast majority of such exceptions under the hood and exposes a single interface for splitting graphemes and thereby generating grapheme-by-grapheme furigana as desired.
 
 ## Known Limitations
 
@@ -29,7 +29,7 @@ print(graphemes.reading_form())
 #### TypeScript
 
 ```typescript
-const graphemes = splitGraphemes("富士", { splitVoiced: false });
+const graphemes = await splitGraphemes("富士", { splitVoiced: false });
 console.log(graphemes.readingForm);
 // Output: [ 'フジ' ]  <-- WRONG: should be [ 'フ', 'ジ' ]
 ```
@@ -53,7 +53,7 @@ print(graphemes.reading_form())
 #### Typescript
 
 ```typescript
-const graphemes = splitGraphemes("送品");
+const graphemes = await splitGraphemes("送品");
 console.log(graphemes.readingForm);
 // Output: [ '送品' ]  <-- WRONG: should be [ 'ソウ', 'ヒン' ]
 ```

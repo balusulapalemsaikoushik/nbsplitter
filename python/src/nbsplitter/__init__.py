@@ -14,5 +14,5 @@
 
 """A tool for splitting Japanese text into graphemes."""
 
-from .splitter import split_graphemes
+from .splitter import generate_furigana, split_graphemes
 from .types import Grapheme, GraphemeList

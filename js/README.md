@@ -1,18 +1,38 @@
 # nbsplitter
 
-The TypeScript implementation of [nbsplitter](https://github.com/balusulapalemsaikoushik/nbsplitter), a tool for splitting Japanese text into graphemes (i.e. the smallest unit of written text that preserves pronunciation).
+The TypeScript implementation of [nbsplitter](https://github.com/balusulapalemsaikoushik/nbsplitter), a tool for manipulating Japanese graphemes (i.e. the smallest unit of written text that preserves pronunciation).
 
 ## Usage
+
+#### Splitting graphemes
 
 ```typescript
 import { splitGraphemes } from "nbsplitter";
 
-const graphemes = splitGraphemes("東大和市");
-console.log(graphemes.surface);
-// Output: [ '東', '大和', '市' ]
-console.log(graphemes.readingForm);
-// Output: [ 'ヒガシ', 'ヤマト', 'シ' ]
+(async () => {
+    const graphemes = await splitGraphemes("東大和市");
+    console.log(graphemes.surface);
+    // Output: [ '東', '大和', '市' ]
+    console.log(graphemes.readingForm);
+    // Output: [ 'ヒガシ', 'ヤマト', 'シ' ]
+})();
 ```
+
+#### Generating furigana
+
+```typescript
+import { generateFurigana, splitGraphemes } from "nbsplitter";
+
+(async () => {
+    const japanese = "私は学生です。";
+    const graphemes = await splitGraphemes(japanese);
+    const furigana = generateFurigana(japanese, graphemes);
+    console.log(furigana);
+    // Output: '<ruby>私<rp>(</rp><rt>わたくし</rt><rp>)</rp></ruby>は<ruby>学<rp>(</rp><rt>がく</rt><rp>)</rp></ruby><ruby>生<rp>(</rp><rt>せい</rt><rp>)</rp></ruby>です。'
+})();
+```
+
+Rendered: <ruby>私<rp>(</rp><rt>わたくし</rt><rp>)</rp></ruby>は<ruby>学<rp>(</rp><rt>がく</rt><rp>)</rp></ruby><ruby>生<rp>(</rp><rt>せい</rt><rp>)</rp></ruby>です。
 
 ## Known Limitations
 
@@ -27,7 +47,7 @@ The WebAssembly distribution of Sudachi that the splitter algorithm relies on do
 Consider the output below:
 
 ```typescript
-const graphemes = splitGraphemes("富士", { splitVoiced: false });
+const graphemes = await splitGraphemes("富士", { splitVoiced: false });
 console.log(graphemes.readingForm);
 // Output: [ 'フジ' ]  <-- WRONG: should be [ 'フ', 'ジ' ]
 ```
@@ -41,7 +61,7 @@ Along with the ability to exert granular control over splitting by type of voici
 Sometimes, the tokenizer underlying the splitter algorithm yields a token reading that isn't written in katakana like expected. For instance,
 
 ```typescript
-const graphemes = splitGraphemes("送品");
+const graphemes = await splitGraphemes("送品");
 console.log(graphemes.readingForm);
 // Output: [ '送品' ]  <-- WRONG: should be [ 'ソウ', 'ヒン' ]
 ```
@@ -77,6 +97,19 @@ A list containing every grapheme's reading form (in katakana).
 
 A list containing every grapheme's original Japanese form.
 
+### generateFurigana()
+
+Generates HTML-flavored furigana for kanji in some text.
+
+Params:
+* **japanese** The text to generate furigana for.
+* **graphemes** The list of graphemes that corresponds with japanese.
+* **format** The format the output furigana should be in.
+
+Returns:
+* A string containing japanese with HTML furigana ruby insertions when appropriate.
+
+
 ### splitGraphemes()
 
 Splits Japanese text into graphemes.
@@ -107,7 +140,7 @@ https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination). Note
 splitSokuon must be true for this behavior to be active.
 
 Returns:
-* A GraphemeList representing the split text.
+* A promise that resolves to a GraphemeList representing the split text.
 
 ## Acknowledgements
 

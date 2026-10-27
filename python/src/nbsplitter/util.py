@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 from functools import lru_cache
 from importlib.resources import files
 
-from jaconv import hira2kata
+from jaconv import hira2kata, kata2alphabet, kata2hira
 from sudachipy import Dictionary
 
 from . import chars
@@ -39,6 +39,19 @@ def _get_sudachi_dict():
 def _is_kana(japanese: str):
     kana_pattern = r"^[\u3040-\u309f\u30a0-\u30ff]+$"
     return bool(re.fullmatch(kana_pattern, japanese))
+
+
+def _is_kanji(japanese: str):
+    kanji_pattern = r"^[\u4e00-\u9fff]+$"
+    return bool(re.fullmatch(kanji_pattern, japanese))
+
+
+def _to_furigana(reading: str, format: str):
+    if format == "hiragana":
+        return kata2hira(reading)
+    elif format == "romaji":
+        return kata2alphabet(reading)
+    return reading
 
 
 def _normalize_on(on: str):

@@ -1,8 +1,10 @@
 # nbsplitter
 
-The Python implementation of [nbsplitter](https://github.com/balusulapalemsaikoushik/nbsplitter), a tool for splitting Japanese text into graphemes (i.e. the smallest unit of written text that preserves pronunciation).
+The Python implementation of [nbsplitter](https://github.com/balusulapalemsaikoushik/nbsplitter), a tool for manipulating Japanese graphemes (i.e. the smallest unit of written text that preserves pronunciation).
 
 ## Usage
+
+#### Splitting graphemes
 
 ```pycon
 >>> from nbsplitter import split_graphemes
@@ -12,6 +14,19 @@ The Python implementation of [nbsplitter](https://github.com/balusulapalemsaikou
 >>> print(graphemes.reading_form())
 ['ヒガシ', 'ヤマト', 'シ']
 ```
+
+#### Generating furigana
+
+```pycon
+>>> from nbsplitter import generate_furigana, split_graphemes
+>>> japanese = "私は学生です。"
+>>> graphemes = split_graphemes(japanese)
+>>> furigana = generate_furigana(japanese, graphemes)
+>>> print(furigana)
+'<ruby>私<rp>(</rp><rt>わたくし</rt><rp>)</rp></ruby>は<ruby>学<rp>(</rp><rt>がく</rt><rp>)</rp></ruby><ruby>生<rp>(</rp><rt>せい</rt><rp>)</rp></ruby>です。'
+```
+
+Rendered: <ruby>私<rp>(</rp><rt>わたくし</rt><rp>)</rp></ruby>は<ruby>学<rp>(</rp><rt>がく</rt><rp>)</rp></ruby><ruby>生<rp>(</rp><rt>せい</rt><rp>)</rp></ruby>です。
 
 ## Known Limitations
 
@@ -115,6 +130,19 @@ A list containing every grapheme's reading form (in katakana).
 #### GraphemeList.surface()
 
 A list containing every grapheme's original Japanese form.
+
+### generate_furigana()
+
+Generates HTML-flavored furigana for kanji in some text.
+
+Args:
+* **japanese**: The text to generate furigana for.
+* **graphemes**: The list of graphemes that corresponds with japanese.
+* **format**: The format the output furigana should be in.
+
+Returns:
+* A string containing japanese with HTML furigana ruby insertions when
+appropriate.
 
 ### split_graphemes()
 

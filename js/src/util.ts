@@ -20,7 +20,7 @@ import { LRUCache } from "lru-cache";
 import pMemoize from "p-memoize";
 import path from "path";
 import { SudachiStateless, TokenizeMode } from "sudachi-wasm333";
-import wanakana from "wanakana";
+import wanakana, { toHiragana, toRomaji } from "wanakana";
 import { Chars } from "./chars.js";
 
 const KANJIDIC2_PATH = path.join(import.meta.dirname, "data/kanjidic2.xml");
@@ -42,6 +42,16 @@ export const getSudachi = pMemoize(async () => {
 function isKana(japanese: string) {
     const regex = new RegExp("^[\u3040-\u309f\u30a0-\u30ff]+$", "u");
     return regex.test(japanese);
+}
+
+/** @internal */
+export function toFurigana(reading: string, format: string) {
+    if (format === "hiragana") {
+        return toHiragana(reading);
+    } else if (format == "romaji") {
+        return toRomaji(reading);
+    }
+    return reading;
 }
 
 /** @internal */

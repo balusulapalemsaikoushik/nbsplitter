@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import warnings
+from typing import Literal
 
 from . import chars
 from .types import Grapheme, GraphemeList, _Grapheme, _GraphemeList
-from .util import _get_readings, _get_sudachi_dict, _is_kana
+from .util import _get_readings, _get_sudachi_dict, _is_kana, _is_kanji, _to_furigana
 
 
 def _clean_token_graphemes(
@@ -341,3 +342,38 @@ def split_graphemes(
             split_offglides,
         )
     return _GraphemeList(graphemes)
+
+
+def generate_furigana(
+        japanese: str,
+        graphemes: GraphemeList,
+        format: Literal["hiragana", "katakana", "romaji"] = "hiragana") -> str:
+    """Generates HTML-flavored furigana for kanji in some text.
+
+    Args:
+        japanese: The text to generate furigana for.
+        graphemes: The list of graphemes that corresponds with japanese.
+        format: The format the output furigana should be in.
+    
+    Returns:
+        A string containing japanese with HTML furigana ruby insertions when
+        appropriate.
+    """
+
+    furigana = ""
+    c = g = 0
+    while c < len(japanese):
+        if g < len(graphemes):
+            grapheme = graphemes[g]
+            if (surface := grapheme.surface()) == japanese[c : c+len(surface)]:
+                if _is_kanji(surface):
+                    reading = _to_furigana(grapheme.reading_form(), format)
+                    furigana += f"<ruby>{surface}<rp>(</rp><rt>{reading}</rt><rp>)</rp></ruby>"
+                else:
+                    furigana += surface
+                c += len(surface)
+                g += 1
+                continue
+        furigana += japanese[c]
+        c += 1
+    return furigana
