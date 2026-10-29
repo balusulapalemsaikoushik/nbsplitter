@@ -80,6 +80,8 @@ async function splitTokenGraphemes(
     reading: string,
     splitVoiced: boolean = true,
     splitClipped: boolean | undefined = undefined,
+    kanjidicUrl: string | undefined = undefined,
+    sudachiUrl: string | undefined = undefined,
 ) {
     /*
      * The following algorithm splits a morpheme into graphemes. Sudachi makes
@@ -156,7 +158,7 @@ async function splitTokenGraphemes(
     while (surfaceRight <= surface.length) {
         const surfaceLeading = surface.slice(surfaceSplit, surfaceRight);
         const surfaceLeadingReadings = await getReadings(
-            surfaceLeading, splitVoiced, splitClipped,
+            surfaceLeading, splitVoiced, splitClipped, kanjidicUrl, sudachiUrl
         );
         for (const surfaceLeadingReading of surfaceLeadingReadings) {
             const readingRight = readingSplit + surfaceLeadingReading.length;
@@ -214,6 +216,8 @@ async function splitTokenGraphemes(
                             surfaceParent,
                             splitVoiced,
                             splitClipped,
+                            kanjidicUrl,
+                            sudachiUrl,
                         )
                     )) {
                         const readingRight = readingLeft! + surfaceParentReading.length;
@@ -251,33 +255,43 @@ async function splitTokenGraphemes(
     ) as Grapheme[];
 }
 
-type SplitSokuonDisabledOptions = {
-    splitSokuon: false;
-    splitClipped?: undefined;
-}
-
-type SplitSokuonEnabledOptions = {
-    splitSokuon: true;
-    splitClipped?: boolean;
-}
-
-type SplitGraphemesOptions = {
+type IndependentSplitOptions = {
     splitVoiced: boolean;
     splitHatsuon: boolean;
     splitModifiers: boolean;
     splitLong: boolean;
     splitOffglides: boolean;
-} & (SplitSokuonDisabledOptions | SplitSokuonEnabledOptions);
+}
 
-export async function splitGraphemes(japanese: string): Promise<GraphemeList>;
-export async function splitGraphemes(
-    japanese: string, options: Partial<SplitGraphemesOptions>
-): Promise<GraphemeList>;
+type LegacySplitOptions = Partial<IndependentSplitOptions & (
+    | { splitSokuon: false; splitClipped?: undefined; }
+    | { splitSokuon: true; splitClipped?: boolean; }
+)>;
+
+type SplitOptions = Partial<IndependentSplitOptions> & (
+    | { splitSokuon?: false | undefined; splitClipped?: undefined; }
+    | { splitSokuon: true; splitClipped?: boolean; }
+) & (
+    | { kanjidicUrl?: undefined, sudachiUrl?: undefined }
+    | { kanjidicUrl: string, sudachiUrl: string }
+);
+
+function isLegacySplitOptions(
+    options: SplitOptions | LegacySplitOptions
+): options is LegacySplitOptions {
+    return options.splitSokuon === undefined && options.splitClipped !== undefined;
+}
 
 /**
  * Splits Japanese text into graphemes.
  * @param japanese The text to be split.
- * @param options Options for how different characters should be treated during splitting.
+ */
+export async function splitGraphemes(japanese: string): Promise<GraphemeList>;
+
+/**
+ * Splits Japanese text into graphemes.
+ * @param japanese The text to be split.
+ * @param options Options for grapheme splitting behavior.
  * @param options.splitVoiced If true the voiced counterparts of voiceless kanji readings will be
  *     treated as standalone readings, most notably in instances of rendaku (see
  *     https://en.wikipedia.org/wiki/Rendaku).
@@ -299,11 +313,38 @@ export async function splitGraphemes(
  *     be clipped to a sokuon will be treated as standalone readings (see
  *     https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination). Note that
  *     splitSokuon must be true for this behavior to be active.
+ * @param options.kanjidicUrl For use in browser environments: URL pointing to a valid
+ *     kanjidic2.xml file. Note that sudachiUrl must be set alongside this value.
+ * @param options.sudachiUrl For use in browser environments: URL pointing to a valid Sudachi
+ *     system dictionary. Note that kanjidicUrl must be set alongside this value.
  * @returns A promise that resolves to a GraphemeList representing the split text.
  */
 export async function splitGraphemes(
-    japanese: string, options: Partial<SplitGraphemesOptions> = {}
+    japanese: string, options: SplitOptions
+): Promise<GraphemeList>;
+
+/**
+ * @deprecated This overload will be removed in version 2.0.0. Please set options.splitSokuon to
+ * use options.splitClipped and do not set options.kanjidicUrl and options.sudachiUrl
+ * independently.
+ */
+export async function splitGraphemes(
+    japanese: string, options: LegacySplitOptions
+): Promise<GraphemeList>;
+
+export async function splitGraphemes(
+    japanese: string, options: SplitOptions | LegacySplitOptions = {}
 ): Promise<GraphemeList> {
+    let kanjidicUrl, sudachiUrl;
+    if (isLegacySplitOptions(options)) {
+        console.warn(
+            "`options.setClipped` was set without providing a value for `options.splitSokuon`;",
+            "This pattern will be unusable in version 2.0.0.",
+        );
+        kanjidicUrl = sudachiUrl = undefined;
+    } else {
+        ({ kanjidicUrl, sudachiUrl } = options);
+    }
     const {
         splitVoiced = true,
         splitSokuon = false,
@@ -311,14 +352,14 @@ export async function splitGraphemes(
         splitModifiers = false,
         splitLong = true,
         splitOffglides = false,
-        splitClipped = undefined
+        splitClipped = undefined,
     } = options;
 
     const graphemes: Grapheme[] = [];
     let surfaceSokuon, readingSokuon, surfaceHatsuon, readingHatsuon;
     surfaceSokuon = readingSokuon = undefined;
     surfaceHatsuon = readingHatsuon = undefined;
-    const sudachi = await getSudachi();
+    const sudachi = await getSudachi(sudachiUrl);
     const tokens = sudachi.tokenize_raw(japanese, TokenizeMode.A);
 
     let surface, reading: string;
@@ -365,6 +406,8 @@ export async function splitGraphemes(
                 reading,
                 splitVoiced,
                 splitClipped,
+                kanjidicUrl,
+                sudachiUrl,
             ),
             splitSokuon,
             splitHatsuon,
@@ -384,18 +427,58 @@ export async function splitGraphemes(
     }) as unknown as GraphemeList;
 }
 
+type FuriganaOptions = Partial<{
+    format: "hiragana" | "katakana" | "romaji";
+}>;
+
 /**
  * Generates HTML-flavored furigana for kanji in some text.
  * @param japanese The text to generate furigana for.
  * @param graphemes The list of graphemes that corresponds with japanese.
- * @param format The format the output furigana should be in.
+ * @returns A string containing japanese with HTML furigana ruby insertions when appropriate.
+*/
+export function generateFurigana(japanese: string, graphemes: GraphemeList): string;
+
+/**
+ * Generates HTML-flavored furigana for kanji in some text.
+ * @param japanese The text to generate furigana for.
+ * @param graphemes The list of graphemes that corresponds with japanese.
+ * @param options Options for furigana generation behavior.
+ * @param options.format The format the output furigana should be in.
  * @returns A string containing japanese with HTML furigana ruby insertions when appropriate.
  */
 export function generateFurigana(
     japanese: string,
     graphemes: GraphemeList,
-    format: "hiragana" | "katakana" | "romaji" = "hiragana",
+    options: FuriganaOptions,
+): string;
+
+/**
+ * @deprecated  This overload will be removed in version 2.0.0. Use options to set furigana
+ * generation format instead.
+ */
+export function generateFurigana(
+    japanese: string,
+    graphemes: GraphemeList,
+    format: "hiragana" | "katakana" | "romaji",
+): string;
+
+export function generateFurigana(
+    japanese: string,
+    graphemes: GraphemeList,
+    config: FuriganaOptions | ("hiragana" | "katakana" | "romaji") = {},
 ): string {
+    let format;
+    if (typeof config === "string") {
+        console.warn(
+            "`format` is no longer used and will be removed in version 2.0.0; use",
+            "`options.format` instead.",
+        );
+        format = config;
+    } else {
+        ({ format = "hiragana" } = config);
+    }
+
     let furigana = "";
     let c, g;
     c = g = 0;
@@ -418,5 +501,5 @@ export function generateFurigana(
         furigana += japanese[c];
         c++;
     }
-    return furigana
+    return furigana;
 }

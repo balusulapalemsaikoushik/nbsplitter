@@ -18,4 +18,4 @@
  */
 
 export { generateFurigana, splitGraphemes } from "./splitter.js";
-export { type Grapheme, type GraphemeList } from "./types.js";
+export type { Grapheme, GraphemeList } from "./types.js";

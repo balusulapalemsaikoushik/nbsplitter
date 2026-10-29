@@ -104,7 +104,8 @@ Generates HTML-flavored furigana for kanji in some text.
 Params:
 * **japanese** The text to generate furigana for.
 * **graphemes** The list of graphemes that corresponds with japanese.
-* **format** The format the output furigana should be in.
+* **options** Options for furigana generation behavior.
+* **options.format** The format the output furigana should be in.
 
 Returns:
 * A string containing japanese with HTML furigana ruby insertions when appropriate.
@@ -115,29 +116,33 @@ Returns:
 Splits Japanese text into graphemes.
 
 Params:
-* **japanese** The text to be split.
-* **options** Options for how different characters should be treated during splitting.
-* **options.splitVoiced** If true the voiced counterparts of voiceless kanji readings will be
+* **japanese**: The text to be split.
+* **options**: Options for grapheme splitting behavior.
+* **options.splitVoiced**: If true the voiced counterparts of voiceless kanji readings will be
 treated as standalone readings, most notably in instances of rendaku (see
 https://en.wikipedia.org/wiki/Rendaku).
-* **options.splitSokuon** If true the sokuon (see https://en.wikipedia.org/wiki/Sokuon) and
+* **options.splitSokuon**: If true the sokuon (see https://en.wikipedia.org/wiki/Sokuon) and
 phonetically indivisble units of text ending with a sokuon will be treated as independent
 graphemes.
-* **options.splitHatsuon** If true the hatsuon (see
+* **options.splitHatsuon**: If true the hatsuon (see
 https://en.wikipedia.org/wiki/Japanese_phonology#Moraic_nasal) and phonetically indivisble
 units of text ending with a hatsuon will be treated as independent graphemes.
-* **options.splitModifiers** If true kana modifier characters, namely yoon (see 
+* **options.splitModifiers**: If true kana modifier characters, namely yoon (see 
 https://en.wikipedia.org/wiki/Y%C5%8Don), choon (see
 https://en.wikipedia.org/wiki/Ch%C5%8Donpu), and small vowels will be treated as independent
 graphemes.
-* **options.splitLong** If true kana used to lengthen vowel sounds that are normally pronounced
+* **options.splitLong**: If true kana used to lengthen vowel sounds that are normally pronounced
 as that same vowel sound will be treated as independent graphemes.
-* **options.splitOffglides** If true offglide kana solely used to lengthen vowel sounds (the
+* **options.splitOffglides**: If true offglide kana solely used to lengthen vowel sounds (the
 "i" in "ei" or the "u" in "ou") will be treated as independent graphemes.
-* **options.splitClipped** If true the clipped versions of on'yomi readings whose last mora can
+* **options.splitClipped**: If true the clipped versions of on'yomi readings whose last mora can
 be clipped to a sokuon will be treated as standalone readings (see
 https://en.wikipedia.org/wiki/Japanese_phonology#Sino-Japanese_gemination). Note that
 splitSokuon must be true for this behavior to be active.
+* **options.kanjidicUrl**: For use in browser environments: URL pointing to a valid
+kanjidic2.xml file. Note that sudachiUrl must be set alongside this value.
+* **options.sudachiUrl**: For use in browser environments: URL pointing to a valid Sudachi
+system dictionary. Note that kanjidicUrl must be set alongside this value.
 
 Returns:
 * A promise that resolves to a GraphemeList representing the split text.

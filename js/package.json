@@ -38,7 +38,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "camaro": "^6.7.3",
+    "fast-xml-parser": "^5.11.2",
     "lru-cache": "^11.5.3",
     "p-memoize": "^9.0.0",
     "sudachi-wasm333": "^1.0.4",

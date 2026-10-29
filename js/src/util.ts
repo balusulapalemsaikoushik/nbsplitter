@@ -14,27 +14,37 @@
  * limitations under the License.
  */
 
-import { transform } from "camaro";
-import { promises as fs } from "fs";
+import { XMLParser } from "fast-xml-parser";
 import { LRUCache } from "lru-cache";
 import pMemoize from "p-memoize";
-import path from "path";
 import { SudachiStateless, TokenizeMode } from "sudachi-wasm333";
-import wanakana, { toHiragana, toRomaji } from "wanakana";
+import { toHiragana, toKatakana, toRomaji } from "wanakana";
 import { Chars } from "./chars.js";
 
-const KANJIDIC2_PATH = path.join(import.meta.dirname, "data/kanjidic2.xml");
-const SUDACHI_DICT_PATH = path.join(import.meta.dirname, "data/system_full.dic");
-
 /** @internal */
-const getKanjidic2 = pMemoize(async () => {
-    return await fs.readFile(KANJIDIC2_PATH, "utf8");
+const getKanjidic2 = pMemoize(async (url: string | undefined = undefined) => {
+    let xml = "";
+    if (url !== undefined) {
+        const response = await fetch(url);
+        xml = await response.text();
+    } else {
+        const { readKanjidic2File } = await import("./server.js");
+        xml = await readKanjidic2File();
+    }
+    return new XMLParser({ ignoreAttributes: false }).parse(xml).kanjidic2;
 }, { cache: new LRUCache({ max: 1 }) });
 
 /** @internal */
-export const getSudachi = pMemoize(async () => {
+export const getSudachi = pMemoize(async (url: string | undefined = undefined) => {
     const sudachi = new SudachiStateless();
-    await sudachi.initialize_node(fs.readFile, SUDACHI_DICT_PATH);
+    if (url !== undefined) {
+        const response = await fetch(url);
+        const buffer = await response.arrayBuffer();
+        sudachi.initialize_from_bytes(new Uint8Array(buffer));
+    } else {
+        const { initializeSudachi } = await import("./server.js");
+        await initializeSudachi(sudachi);
+    }
     return sudachi;
 }, { cache: new LRUCache({ max: 1 }) });
 
@@ -78,7 +88,7 @@ function normalizeKun(kun: string) {
     // Remove okurigana (see https://en.wikipedia.org/wiki/Okurigana) suffixes
     // (separated from core reading by ".") and affix markers ("-")
     
-    return wanakana.toKatakana(kun.split(".")[0]!.replace("-", ""));
+    return toKatakana(kun.split(".")[0]!.replace("-", ""));
 }
 
 /** @internal */
@@ -97,8 +107,8 @@ function getVoicedReadings(readings: Set<string>) {
 }
 
 /** @internal */
-async function lookup(word: string) {
-    const sudachi = await getSudachi();
+async function lookup(word: string, url: string | undefined = undefined) {
+    const sudachi = await getSudachi(url);
     const tokens = sudachi.tokenize_raw(word, TokenizeMode.C);
     if (tokens.length == 1) {
         const token = tokens[0]!
@@ -113,39 +123,40 @@ export async function getReadings(
     japanese: string,
     includeVoiced: boolean = true,
     includeClipped: boolean | undefined = undefined,
+    kanjidicUrl: string | undefined = undefined,
+    sudachiUrl: string | undefined = undefined,
 ) {
     if (Chars.MISC_READINGS.has(japanese)) {
         return Chars.MISC_READINGS.get(japanese)!;
     }
     if (isKana(japanese)) {
-        return [wanakana.toKatakana(japanese)]  // Leaves katakana untouched
+        return [toKatakana(japanese)]  // Leaves katakana untouched
     }
     let readings = new Set<string>();
     if (japanese.length == 1) {
-        const kanjidic2 = await getKanjidic2();
-        const { kanji } = await transform(
-            kanjidic2, { kanji: `raw(.//character[literal='${japanese}'])` }
+        const kanjidic2 = await getKanjidic2(kanjidicUrl);
+        const kanji = kanjidic2.character.find(
+            (character: any) => character["literal"] === japanese
         );
-        if (kanji.length > 0) {
-            let onReadings = new Set<string>(
-                (await transform(kanji, [".//reading[@r_type='ja_on']", "."])).map(
-                    (onReading) => normalizeOn(onReading)
-                )
+        if (kanji !== undefined) {
+            const charReadings = kanji.reading_meaning.rmgroup.reading;
+            let onReadings = new Set<string>(charReadings
+                .filter((reading: any) => reading["@_r_type"] === "ja_on")
+                .map((on: any) => normalizeOn(on["#text"]))
             );
             if (includeClipped) {
                 onReadings = onReadings.union(getClippedReadings(onReadings));
             }
-            const kunReadings = new Set<string>(
-                (await transform(kanji, [".//reading[@r_type='ja_kun']", "."])).map(
-                    (kunReading) => normalizeKun(kunReading)
-                )
+            const kunReadings = new Set<string>(charReadings
+                .filter((reading: any) => reading["@_r_type"] === "ja_kun")
+                .map((kun: any) => normalizeKun(kun["#text"]))
             );
             readings = new Set([...readings, ...onReadings, ...kunReadings]);
         }
         // Generally speaking, if the character isn't found in the dictionary,
         // it probably doesn't have an independent reading
     } else {
-        const reading = await lookup(japanese);
+        const reading = await lookup(japanese, sudachiUrl);
         if (reading !== undefined) {
             readings.add(reading);
         }
